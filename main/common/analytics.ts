@@ -4,7 +4,7 @@ import util from 'electron-util';
 import {parse} from 'semver';
 import {settings} from './settings';
 
-// TODO: Disabled because of https://github.com/wulkano/Kap/issues/1126
+// TODO: Disabled because of upstream issue (formerly wulkano/Kap#1126)
 /// const Insight = require('insight');
 const pkg = require('../../package');
 

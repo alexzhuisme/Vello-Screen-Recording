@@ -11,6 +11,13 @@ import {windowManager} from './windows/manager';
 import {pauseRecording, resumeRecording, stopRecording} from './aperture';
 import {MenuOptions} from './menus/utils';
 
+/**
+ * Stable UUID for `new Tray(image, guid)`. macOS (and Windows with signing) use this to
+ * persist menu-bar/tray placement across launches after the user drags the icon — apps
+ * cannot programmatically pin next to the system Wi‑Fi/battery cluster.
+ */
+export const TRAY_GUID = 'c4f7e2b9-8a3d-41ac-9f51-6dbe8c7a2f30';
+
 let tray: Tray;
 let trayAnimation: NodeJS.Timeout | undefined;
 let rendererReady = false;
@@ -50,7 +57,7 @@ const openPausedContextMenu = async () => {
 };
 
 export const initializeTray = () => {
-  tray = new Tray(path.join(__dirname, '..', 'static', 'menubarDefaultTemplate.png'));
+  tray = new Tray(path.join(__dirname, '..', 'static', 'menubarDefaultTemplate.png'), TRAY_GUID);
   tray.on('click', openTrayMenu);
   tray.on('right-click', openTrayMenu);
   tray.on('drop-files', (_, files) => {

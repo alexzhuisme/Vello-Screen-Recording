@@ -34,6 +34,7 @@ export interface ProcessOptions {
 const defaultProcessOptions = {
   shouldTrack: true
 };
+const MAX_STDERR_CHARS = 64 * 1024;
 
 const createProcess = (mode: Mode) => {
   const program = modes.get(mode)!;
@@ -72,6 +73,9 @@ const createProcess = (mode: Mode) => {
       runner.stderr?.setEncoding('utf8');
       runner.stderr?.on('data', data => {
         stderr += data;
+        if (stderr.length > MAX_STDERR_CHARS) {
+          stderr = stderr.slice(-MAX_STDERR_CHARS);
+        }
 
         const progressData = extractProgressFromStderr(data, conversionStartTime, durationMs);
 

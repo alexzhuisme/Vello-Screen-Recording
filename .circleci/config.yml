@@ -10,9 +10,9 @@ jobs:
       - run: yarn lint
       - run: yarn test:ci
       - run: yarn run dist
-      - run: mv dist/*-arm64.dmg dist/Kap-arm64.dmg
+      - run: mv dist/*-arm64.dmg dist/Vello-arm64.dmg
       - store_artifacts:
-          path: dist/Kap-arm64.dmg
+          path: dist/Vello-arm64.dmg
       - store_test_results:
           path: ~/reports
   sentry-release:

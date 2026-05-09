@@ -30,8 +30,8 @@ const getVideoProps = (propsArray: Array<React.DetailedHTMLProps<React.VideoHTML
 
 const Video = () => {
   const videoRef = useRef<HTMLVideoElement>();
-  const {filePath} = useEditorWindowState();
-  const src = `file://${filePath}`;
+  const {previewFilePath} = useEditorWindowState();
+  const src = previewFilePath ? `file://${previewFilePath}` : undefined;
 
   const videoTimeContainer = VideoTimeContainer.useContainer();
   const videoMetadataContainer = VideoMetadataContainer.useContainer();

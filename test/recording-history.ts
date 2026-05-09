@@ -195,7 +195,7 @@ test('`setCurrentRecording()`', t => {
 
   t.deepEqual(recordingHistory.get('activeRecording'), {
     filePath: 'some/path',
-    name: 'Kapture 2020-07-21 at 11.27.26',
+    name: 'Recording 2020-07-21 at 11.27.26',
     date: t.context.now.toISOString(),
     apertureOptions: {some: 'options'} as any,
     plugins: {some: 'plugins'} as any

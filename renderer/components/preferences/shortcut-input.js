@@ -1,4 +1,4 @@
-import React, {useRef, useEffect, useState} from 'react';
+import React, {useRef, useEffect, useState, useCallback} from 'react';
 import PropTypes from 'prop-types';
 import classNames from 'classnames';
 import {shake} from '../../utils/inputs';
@@ -54,19 +54,40 @@ const metaCharacters = new Map([
   ['Ctrl', '⌃']
 ]);
 
+const normalizeKeyFromEvent = event => {
+  const {code, key, keyCode} = event;
+
+  // Prefer physical key mapping for predictable shortcuts across layouts.
+  if (typeof code === 'string') {
+    if (/^Key[A-Z]$/.test(code)) {
+      return code.slice(3);
+    }
+
+    if (/^Digit\d$/.test(code)) {
+      return code.slice(5);
+    }
+  }
+
+  if ((keyCode > 47 && keyCode < 58) || (keyCode > 64 && keyCode < 91)) {
+    return String.fromCharCode(keyCode);
+  }
+
+  return key;
+};
+
 const ShortcutInput = ({shortcut = '', onChange, tabIndex}) => {
   const [keys, setKeys] = useState(shortcut.split('+').filter(Boolean));
   const [isEditing, setIsEditing] = useState(false);
   const boxRef = useRef();
   const inputRef = useRef();
 
-  const resetKeys = () => {
+  const resetKeys = useCallback(() => {
     setKeys(shortcut.split('+').filter(Boolean));
-  };
+  }, [shortcut]);
 
   useEffect(() => {
     resetKeys();
-  }, [shortcut]);
+  }, [resetKeys]);
 
   const keysToRender = keys.map(key => metaCharacters.get(key) || key);
 
@@ -95,8 +116,7 @@ const ShortcutInput = ({shortcut = '', onChange, tabIndex}) => {
   };
 
   const handleKeyDown = event => {
-    // TODO: Use `code` instead of `keyCode` when this is released https://github.com/facebook/react/pull/18287
-    const {metaKey, altKey, ctrlKey, shiftKey, key, location, keyCode} = event;
+    const {metaKey, altKey, ctrlKey, shiftKey, key, location} = event;
     const metaKeys = [
       metaKey && 'Command',
       altKey && 'Alt',
@@ -125,7 +145,7 @@ const ShortcutInput = ({shortcut = '', onChange, tabIndex}) => {
       return;
     }
 
-    const mappedKey = (keyCode > 47 && keyCode < 58) || (keyCode > 64 && keyCode < 91) ? String.fromCharCode(keyCode) : key;
+    const mappedKey = normalizeKeyFromEvent(event);
 
     const keys = [...metaKeys, eventKeyToAccelerator(mappedKey, location)];
     const accelerator = keys.join('+');

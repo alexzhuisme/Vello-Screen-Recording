@@ -76,7 +76,7 @@ class General extends React.Component {
             key="showCursor"
             parentItem
             title="Show cursor"
-            subtitle="Display the mouse cursor in your Kaptures"
+            subtitle="Display the mouse cursor in your recordings"
           >
             <Switch
               tabIndex={tabIndex}
@@ -167,14 +167,14 @@ class General extends React.Component {
         <Item
           key="allowAnalytics"
           title="Allow analytics"
-          subtitle="Help us improve Kap by sending anonymous usage stats"
+          subtitle="Help us improve Vello by sending anonymous usage stats"
         >
           <Switch tabIndex={tabIndex} checked={allowAnalytics} onClick={() => toggleSetting('allowAnalytics')}/>
         </Item>
         <Item
           key="openOnStartup"
           title="Start automatically"
-          subtitle="Launch Kap on system startup"
+          subtitle="Launch Vello on system startup"
         >
           <Switch tabIndex={tabIndex} checked={openOnStartup} onClick={setOpenOnStartup}/>
         </Item>

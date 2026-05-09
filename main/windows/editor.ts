@@ -24,8 +24,9 @@ const open = async (video: Video) => {
     return;
   }
 
-  // TODO: Make this smarter so the editor can show with a spinner while the preview is generated for longer preview conversions (like ProRes)
-  await video.whenPreviewReady();
+  // Open quickly after lightweight metadata is available; preview transcoding can
+  // continue in the background and update the renderer once ready.
+  await video.whenReady();
 
   const editorKapWindow = new KapWindow<EditorWindowState>({
     title: video.title,
@@ -47,9 +48,9 @@ const open = async (video: Video) => {
     vibrancy: 'window',
     route: 'editor',
     initialState: {
-      previewFilePath: video.previewPath!,
+      previewFilePath: video.previewPath,
       filePath: video.filePath,
-      fps: video.fps!,
+      fps: video.fps ?? 30,
       title: video.title
     },
     menu: defaultMenu => {
@@ -77,6 +78,24 @@ const open = async (video: Video) => {
   const editorWindow = editorKapWindow.browserWindow;
 
   editors.set(video.filePath, editorWindow);
+
+  void video.whenPreviewReady().then(previewFilePath => {
+    if (!previewFilePath || editorWindow.isDestroyed()) {
+      return;
+    }
+
+    const previousState = editorKapWindow.state;
+    if (!previousState) {
+      return;
+    }
+
+    editorKapWindow.setState({
+      ...previousState,
+      previewFilePath
+    });
+  }).catch(() => {
+    // Keep editor usable even if preview generation fails.
+  });
 
   if (video.isNewRecording) {
     editorWindow.setDocumentEdited(true);

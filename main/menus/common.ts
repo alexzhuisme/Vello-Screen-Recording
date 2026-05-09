@@ -37,18 +37,18 @@ const release = macosRelease();
 
 const issueBody = `
 <!--
-Thank you for helping us test Kap. Your feedback helps us make Kap better for everyone!
+Thank you for helping us test Vello. Your feedback helps us make Vello better for everyone!
 
 Before you continue; please make sure you've searched our existing issues to avoid duplicates. When you're ready to open a new issue, include as much information as possible. You can use the handy template below for bug reports.
 
 Step to reproduce:    If applicable, provide steps to reproduce the issue you're having.
-Current behavior:     A description of how Kap is currently behaving.
-Expected behavior:    How you expected Kap to behave.
+Current behavior:     A description of how Vello is currently behaving.
+Expected behavior:    How you expected Vello to behave.
 Workaround:           A workaround for the issue if you've found on. (this will help others experiencing the same issue!)
 -->
 
 **macOS version:**    ${release.name} (${release.version})
-**Kap version:**      ${app.getVersion()}
+**Vello version:**    ${app.getVersion()}
 
 #### Steps to reproduce
 

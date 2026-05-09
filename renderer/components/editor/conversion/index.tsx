@@ -45,13 +45,9 @@ const EditorConversionView = ({conversionId}: {conversionId: string}) => {
         <TitleBar
           conversion={conversion.state}
           cancel={cancelAndGoBack}
-          copy={() => {
-            conversion.copy();
-          }}
           retry={() => {
             conversion.retry();
-          }}
-          showInFolder={showInFolder}/>
+          }}/>
         <VideoPreview conversion={conversion.state} cancel={finalCancel} showInFolder={showInFolder}/>
         <ConversionDetails conversion={conversion.state} showInFolder={showInFolder}/>
       </div>

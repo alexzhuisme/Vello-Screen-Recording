@@ -6,7 +6,7 @@ import SentryErrorBoundary from '../utils/sentry-error-boundary';
 import {WindowStateProvider} from '../hooks/window-state';
 import classNames from 'classnames';
 
-const Kap = (props: AppProps) => {
+const Vello = (props: AppProps) => {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -36,4 +36,4 @@ const MainApp = ({Component, pageProps}: AppProps) => {
   );
 };
 
-export default Kap;
+export default Vello;

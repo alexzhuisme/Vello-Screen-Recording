@@ -37,8 +37,8 @@ export const openSystemPreferences = async (path: string) => shell.openExternal(
 const getMicrophoneAccess = () => systemPreferences.getMediaAccessStatus('microphone');
 
 const microphoneFallback = promptSystemPreferences({
-  message: 'Kap cannot access the microphone.',
-  detail: 'Kap requires microphone access to be able to record audio. You can grant this in the System Preferences. Afterwards, launch Kap for the changes to take effect.',
+  message: 'Vello cannot access the microphone.',
+  detail: 'Vello requires microphone access to be able to record audio. You can grant this in the System Preferences. Afterwards, launch Vello for the changes to take effect.',
   systemPreferencesPath: 'Privacy_Microphone'
 });
 
@@ -67,8 +67,8 @@ export const hasMicrophoneAccess = () => getMicrophoneAccess() === 'granted';
 // Screen Capture (10.15 and newer)
 
 const screenCaptureFallback = promptSystemPreferences({
-  message: 'Kap cannot record the screen.',
-  detail: 'Kap requires screen capture access to be able to record the screen. You can grant this in the System Preferences. Afterwards, launch Kap for the changes to take effect.',
+  message: 'Vello cannot record the screen.',
+  detail: 'Vello requires screen capture access to be able to record the screen. You can grant this in the System Preferences. Afterwards, launch Vello for the changes to take effect.',
   systemPreferencesPath: 'Privacy_ScreenCapture'
 });
 

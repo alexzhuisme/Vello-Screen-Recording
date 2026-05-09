@@ -158,8 +158,8 @@ const handleRecording = async (recording: ActiveRecording) => {
   });
 
   return windowManager.dialog?.open({
-    title: 'Kap didn\'t shut down correctly.',
-    detail: 'Looks like Kap crashed during a recording. Kap was able to locate the file and it appears to be playable.',
+    title: 'Vello didn\'t shut down correctly.',
+    detail: 'Looks like Vello crashed during a recording. Vello was able to locate the file and it appears to be playable.',
     buttons: [
       'Close',
       {
@@ -203,8 +203,8 @@ const knownErrors = [{
 
 const handleCorruptRecording = async (recording: ActiveRecording, error: string) => {
   const options: any = {
-    title: 'Kap didn\'t shut down correctly.',
-    detail: `Looks like Kap crashed during a recording. We were able to locate the file. Unfortunately, it appears to be corrupt.\n\n${error}`,
+    title: 'Vello didn\'t shut down correctly.',
+    detail: `Looks like Vello crashed during a recording. We were able to locate the file. Unfortunately, it appears to be corrupt.\n\n${error}`,
     cancelId: 0,
     defaultId: 2,
     buttons: [
@@ -272,7 +272,7 @@ const handleCorruptRecording = async (recording: ActiveRecording, error: string)
       }
 
       return updateUi({
-        message: 'Kap was unable to repair the recording.',
+        message: 'Vello was unable to repair the recording.',
         defaultId: 2,
         buttons: [
           'Close',

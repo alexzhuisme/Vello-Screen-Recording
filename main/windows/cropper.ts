@@ -109,8 +109,8 @@ const openCropperWindow = async () => {
         type: 'warning',
         buttons: ['Open System Preferences', 'Continue'],
         defaultId: 1,
-        message: 'Kap cannot access the microphone.',
-        detail: 'Audio recording is enabled but Kap does not have access to the microphone. Continue without audio or grant Kap access to the microphone the System Preferences.',
+        message: 'Vello cannot access the microphone.',
+        detail: 'Audio recording is enabled but Vello does not have access to the microphone. Continue without audio or grant Vello access to the microphone the System Preferences.',
         cancelId: 2
       });
 

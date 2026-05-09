@@ -68,11 +68,11 @@ const release = macosRelease();
 
 const getIssueBody = (title: string, errorStack: string, sentryTemplate = '') => `
 ${sentryTemplate}<!--
-Thank you for helping us test Kap. Your feedback helps us make Kap better for everyone!
+Thank you for helping us test Vello. Your feedback helps us make Vello better for everyone!
 -->
 
 **macOS version:**    ${release.name} (${release.version})
-**Kap version:**      ${app.getVersion()}
+**Vello version:**    ${app.getVersion()}
 
 \`\`\`
 ${title}

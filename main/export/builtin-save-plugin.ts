@@ -4,7 +4,7 @@ import {ShareService} from '../plugins/service';
 import type {PluginContextRef} from '../plugins/service-context';
 
 /**
- * Single built-in “export target” bundled with Kap (no npm/yarn plugin system).
+ * Single built-in “export target” bundled with Vello (no npm/yarn plugin system).
  */
 export class BuiltinSaveToDiskPlugin implements PluginContextRef {
   readonly config: PluginConfig;

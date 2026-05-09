@@ -1,8 +1,8 @@
 # Your privacy
 
-Even though Kap is open-source and not in the business of monetizing the product itself nor your data, directly or indirectly, we feel it's important to share how we think about, collect and use insights we gain on how Kap is used through certain [third party services](#third-party-services).
+Even though Vello is not in the business of monetizing the product itself nor your data, directly or indirectly, we feel it's important to share how we think about, collect and use insights we gain on how Vello is used through certain [third party services](#third-party-services).
 
-The short version is that we respect your privacy, aim to give you as much choice and control as possible, and try to gather only the minimum amount of data absolutely necessary to help us make Kap better for you and everyone else.
+The short version is that we respect your privacy, aim to give you as much choice and control as possible, and try to gather only the minimum amount of data absolutely necessary to help us make Vello better for you and everyone else.
 
 ### Security
 
@@ -59,7 +59,7 @@ When you provide your name and email address to [receive email updates](http://e
 
 We do not allow MailChimp to use your information in their data science projects.
 
-You can unsubscribe from emails regarding Kap at any time by using the unsubscribe link in the footer of any email you receive from us, or by contacting us at hello@wulkano.com.
+You can unsubscribe from emails regarding Vello at any time by using the unsubscribe link in the footer of any email you receive from us, or by contacting us at hello@vello.app.
 
 - [About MailChimp, the EU/Swiss Privacy Shield, and the GDPR](https://kb.mailchimp.com/accounts/management/about-mailchimp-the-eu-swiss-privacy-shield-and-the-gdpr)
 - [Privacy Shield Certificate](https://www.privacyshield.gov/participant?id=a2zt0000000TO6hAAG)

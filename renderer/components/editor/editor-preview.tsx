@@ -7,7 +7,8 @@ import {useState, useRef, useEffect, useCallback} from 'react';
 const TOP_BAR_HIDE_DELAY_MS = 320;
 
 const EditorPreview = () => {
-  const {title = 'Editor'} = useEditorWindowState();
+  const {title = 'Editor', previewFilePath} = useEditorWindowState();
+  const isPreviewReady = Boolean(previewFilePath);
   const [topBarVisible, setTopBarVisible] = useState(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -88,9 +89,16 @@ const EditorPreview = () => {
             </div>
           </div>
         </div>
-        <VideoPlayer/>
+        {
+          isPreviewReady ?
+            <VideoPlayer/> :
+            <div className="preview-loading">
+              <div className="spinner"/>
+              <div className="loading-label">Preparing preview…</div>
+            </div>
+        }
       </div>
-      <Options/>
+      {isPreviewReady && <Options/>}
       <style jsx>{`
         .preview-container {
           display: flex;
@@ -161,6 +169,34 @@ const EditorPreview = () => {
           font-size: 1.4rem;
           color: #fff;
           margin-left: -72px;
+        }
+
+        .preview-loading {
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          color: rgba(255, 255, 255, 0.9);
+          font-size: 13px;
+          letter-spacing: 0.2px;
+        }
+
+        .spinner {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          border: 2px solid rgba(255, 255, 255, 0.2);
+          border-top-color: rgba(255, 255, 255, 0.85);
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          to {
+            transform: rotate(360deg);
+          }
         }
       `}</style>
     </div>

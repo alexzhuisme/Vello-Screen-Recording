@@ -7,7 +7,7 @@ const {defaultInputDeviceId} = require('./constants');
 const shortcutToAccelerator = require('../utils/shortcut-to-accelerator');
 
 export const shortcuts = {
-  triggerCropper: 'Toggle Kap'
+  triggerCropper: 'Toggle Vello'
 };
 
 const shortcutSchema = {
@@ -44,7 +44,7 @@ export const settings = new Store<Settings>({
   schema: {
     kapturesDir: {
       type: 'string',
-      default: `${homedir()}/Movies/Kaptures`
+      default: `${homedir()}/Movies/Vello Recordings`
     },
     allowAnalytics: {
       type: 'boolean',

@@ -77,7 +77,7 @@ const checkForUpdates = () => {
   setupProtocol();
 
   app.dock.hide();
-  app.setAboutPanelOptions({copyright: 'Copyright © Wulkano'});
+  app.setAboutPanelOptions({copyright: 'Copyright © Vello'});
 
   // Ensure the app is in the Applications folder
   enforceMacOSAppLocation();
@@ -91,13 +91,12 @@ const checkForUpdates = () => {
 
   setRendererReady();
 
-  // Register the tray after first paint so this NSStatusItem is created late in startup.
-  // On macOS, extras are ordered by insertion time; later registration sits farther right
-  // (closer to the system controls) than icons created earlier in this launch sequence.
+  // Menu bar icon is registered after the renderer is ready. Placement among third-party
+  // icons follows OS rules; use ⌘+drag to move Vello — Electron `Tray` GUID preserves spot.
   initializeTray();
 
-  if (!app.isDefaultProtocolClient('kap')) {
-    app.setAsDefaultProtocolClient('kap');
+  if (!app.isDefaultProtocolClient('vello')) {
+    app.setAsDefaultProtocolClient('vello');
   }
 
   if (filesToOpen.length > 0) {

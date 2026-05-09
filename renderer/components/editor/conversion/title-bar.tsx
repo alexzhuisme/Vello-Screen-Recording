@@ -1,12 +1,10 @@
 import TrafficLights from 'components/traffic-lights';
-import {BackPlainIcon, MoreIcon} from 'vectors';
+import {BackPlainIcon} from 'vectors';
 import {UseConversionState} from 'hooks/editor/use-conversion';
 import {flags} from 'utils/flags-ipc';
-import {ExportStatus} from '../../../common/types';
-import {useMemo} from 'react';
-import IconMenu from '../../icon-menu';
+import {ExportStatus} from 'common/types';
 
-const TitleBar = ({conversion, cancel, copy, retry, showInFolder}: {conversion: UseConversionState; cancel: () => any; copy: () => any; retry: () => any; showInFolder: () => void}) => {
+const TitleBar = ({conversion, cancel, retry}: {conversion: UseConversionState; cancel: () => any; retry: () => any}) => {
   const shouldClose = async () => {
     const backgroundConversion = await flags.get('backgroundEditorConversion');
     if (conversion.status === ExportStatus.inProgress && !backgroundConversion) {
@@ -22,36 +20,6 @@ const TitleBar = ({conversion, cancel, copy, retry, showInFolder}: {conversion: 
     return true;
   };
 
-  const menuTemplate = useMemo(() => {
-    const template: any[] = [];
-
-    if (conversion?.canCopy) {
-      template.push({
-        label: 'Copy',
-        value: 'copy'
-      }, {
-        type: 'separator'
-      });
-    }
-
-    if (conversion?.status === ExportStatus.completed) {
-      template.push({
-        label: 'Show in Finder',
-        value: 'showInFolder'
-      });
-    }
-
-    return template;
-  }, [conversion?.canCopy, conversion?.status]);
-
-  const handleMenuSelect = (value: string) => {
-    if (value === 'copy') {
-      copy();
-    } else if (value === 'showInFolder') {
-      showInFolder();
-    }
-  };
-
   const canRetry = [ExportStatus.canceled, ExportStatus.failed].includes(conversion?.status);
 
   return (
@@ -64,21 +32,6 @@ const TitleBar = ({conversion, cancel, copy, retry, showInFolder}: {conversion: 
       </div>
       <div className="right">
         {canRetry && <div className="button" onClick={retry}>Retry</div>}
-        {
-          menuTemplate.length > 0 && (
-            <div className="icon">
-              <IconMenu
-                icon={MoreIcon}
-                fill="white"
-                hoverFill="white"
-                activeFill="white"
-                size="20px"
-                template={menuTemplate}
-                onSelect={handleMenuSelect}
-              />
-            </div>
-          )
-        }
       </div>
       <style jsx>{`
         .title-bar {
@@ -109,6 +62,7 @@ const TitleBar = ({conversion, cancel, copy, retry, showInFolder}: {conversion: 
           display: flex;
           align-items: center;
           justify-content: center;
+          -webkit-app-region: no-drag;
         }
 
         .button {
@@ -123,6 +77,7 @@ const TitleBar = ({conversion, cancel, copy, retry, showInFolder}: {conversion: 
           font-size: 12px;
           line-height: 16px;
           font-weight: 500;
+          -webkit-app-region: no-drag;
         }
 
         .button:active,
