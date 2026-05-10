@@ -83,18 +83,6 @@ const EditorPage = () => {
           --slider-thumb-color: var(--storm);
         }
 
-        .tooltip {
-          padding: 0 !important;
-          max-width: 300px;
-        }
-
-        .tooltip-content {
-          padding: 8px 21px;
-        }
-
-        .hide-tooltip .tooltip {
-          display: none;
-        }
       `}</style>
     </div>
   );

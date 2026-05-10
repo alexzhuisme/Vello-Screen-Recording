@@ -1,24 +1,12 @@
 import {CancelIcon, SpinnerIcon} from 'vectors';
-import {UseConversion, UseConversionState} from 'hooks/editor/use-conversion';
+import {UseConversionState} from 'hooks/editor/use-conversion';
 import {ExportStatus} from 'common/types';
 import useEditorWindowState from 'hooks/editor/use-editor-window-state';
 import useConversionIdContext from 'hooks/editor/use-conversion-id';
-import {flags} from 'utils/flags-ipc';
-import ReactTooltip from 'react-tooltip';
-import {useEffect, useRef, useState} from 'react';
-import classNames from 'classnames';
 
 const VideoPreview = ({conversion, cancel, showInFolder}: {conversion: UseConversionState; cancel: () => any; showInFolder: () => any}) => {
   const {conversionId} = useConversionIdContext();
   const {filePath} = useEditorWindowState();
-  const [tooltipShowing, setTooltipShowing] = useState(true);
-  const tooltipRef = useRef();
-
-  useEffect(() => {
-    flags.get('editorDragTooltip').then((value: unknown) => {
-      setTooltipShowing(!value);
-    });
-  }, []);
   const src = `file://${filePath}`;
 
   const percentage = conversion?.progress ?? 0;
@@ -29,35 +17,11 @@ const VideoPreview = ({conversion, cancel, showInFolder}: {conversion: UseConver
     window.kap.ipc.send('drag-export', conversionId);
   };
 
-  useEffect(() => {
-    if (!done) {
-      return;
-    }
-
-    if (tooltipShowing) {
-      ReactTooltip.show(tooltipRef.current);
-    } else {
-      ReactTooltip.hide(tooltipRef.current);
-    }
-  }, [tooltipRef.current, tooltipShowing, done]);
-
-  const onTooltipClick = event => {
-    event.stopPropagation();
-    setTooltipShowing(false);
-  };
-
-  const onTooltipHide = () => {
-    flags.set('editorDragTooltip', true);
-    setTooltipShowing(false);
-  };
-
   return (
     <div
-      ref={tooltipRef}
-      data-tip="Plz"
       draggable={done}
-      className={classNames('video-preview', {'hide-tooltip': !tooltipShowing})}
-      data-for="tooltip"
+      className="video-preview"
+      title={done ? 'Drag to copy to another app or the desktop. Click to show in Finder.' : undefined}
       onDragStart={onDragStart}
       onClick={showInFolder}
     >
@@ -78,23 +42,6 @@ const VideoPreview = ({conversion, cancel, showInFolder}: {conversion: UseConver
           <CancelIcon fill="white" hoverFill="white" activeFill="white" size="100%"/>
         </div>
       </div>
-      <ReactTooltip
-        border
-        multiline
-        clickable
-        disable={!tooltipShowing}
-        place="bottom"
-        event="dblclick"
-        eventOff="dblclick"
-        className="tooltip"
-        id="tooltip"
-        backgroundColor="var(--background-color)"
-        effect="solid"
-        borderColor="rgba(255, 255, 255, 0.4)"
-        afterHide={onTooltipHide}
-      >
-        <div className="tooltip-content" onClick={onTooltipClick}>Drag and drop to copy the recording to your desktop or an application. Click to open its parent directory</div>
-      </ReactTooltip>
       <style jsx>{`
         .video-preview {
           width: 100%;
