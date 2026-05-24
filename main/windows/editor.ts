@@ -1,10 +1,10 @@
 import {EditorWindowState} from '../common/types';
 import type {Video} from '../video';
 import KapWindow from './kap-window';
+import {windowManager} from './manager';
 import {MenuItemId} from '../menus/utils';
 import {BrowserWindow, dialog, app} from 'electron';
 import fs from 'fs';
-import {windowManager} from './manager';
 import {exitFullScreenIfNeeded} from '../utils/fullscreen';
 
 const pify = require('pify');
@@ -115,17 +115,30 @@ const open = async (video: Video) => {
             return;
           }
 
-          const {response} = await dialog.showMessageBox(editorWindow, {
-            type: 'question',
-            buttons: [
-              'Discard',
-              'Cancel'
-            ],
-            defaultId: 0,
-            cancelId: 1,
-            message: 'Are you sure that you want to discard this recording?',
-            detail: 'You will no longer be able to edit and export the original recording.'
-          });
+          const wasVisibleOnAllWorkspaces = editorWindow.isVisibleOnAllWorkspaces();
+          if (!wasVisibleOnAllWorkspaces) {
+            editorWindow.setVisibleOnAllWorkspaces(true, {visibleOnFullScreen: true});
+          }
+
+          let response = 1;
+          try {
+            ({response} = await dialog.showMessageBox(editorWindow, {
+              type: 'question',
+              buttons: [
+                'Discard',
+                'Cancel'
+              ],
+              defaultId: 0,
+              cancelId: 1,
+              message: 'Are you sure that you want to discard this recording?',
+              detail: 'You will no longer be able to edit and export the original recording.'
+            }));
+          } finally {
+            if (!editorWindow.isDestroyed() && !wasVisibleOnAllWorkspaces) {
+              editorWindow.setVisibleOnAllWorkspaces(false);
+            }
+          }
+
           if (response === 0) {
             allowCloseWithoutConfirm = true;
             editorWindow.close();

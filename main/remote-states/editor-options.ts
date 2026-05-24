@@ -5,16 +5,27 @@ import {formats} from '../common/constants';
 import {builtinSavePlugin} from '../export/builtin-save-plugin';
 import {prettifyFormat} from '../utils/formats';
 
+const defaultExportUsageHistory: {[key in Format]: {lastUsed: number; plugins: Record<string, number>}} = {
+  mp4: {lastUsed: 6, plugins: {default: 1}},
+  hevc: {lastUsed: 5, plugins: {default: 1}},
+  av1: {lastUsed: 4, plugins: {default: 1}},
+  gif: {lastUsed: 3, plugins: {default: 1}},
+  apng: {lastUsed: 2, plugins: {default: 1}},
+  webm: {lastUsed: 1, plugins: {default: 1}}
+};
+
+const legacyExportUsageHistory: {[key in Format]: {lastUsed: number; plugins: Record<string, number>}} = {
+  gif: {lastUsed: 6, plugins: {default: 1}},
+  mp4: {lastUsed: 5, plugins: {default: 1}},
+  webm: {lastUsed: 4, plugins: {default: 1}},
+  hevc: {lastUsed: 3, plugins: {default: 1}},
+  av1: {lastUsed: 2, plugins: {default: 1}},
+  apng: {lastUsed: 1, plugins: {default: 1}}
+};
+
 const exportUsageHistory = new Store<{[key in Format]: {lastUsed: number; plugins: Record<string, number>}}>({
   name: 'export-usage-history',
-  defaults: {
-    gif: {lastUsed: 6, plugins: {default: 1}},
-    mp4: {lastUsed: 5, plugins: {default: 1}},
-    webm: {lastUsed: 4, plugins: {default: 1}},
-    hevc: {lastUsed: 3, plugins: {default: 1}},
-    av1: {lastUsed: 2, plugins: {default: 1}},
-    apng: {lastUsed: 1, plugins: {default: 1}}
-  }
+  defaults: defaultExportUsageHistory
 });
 
 const fpsUsageHistory = new Store<{[key in Format]: number}>({
@@ -52,6 +63,27 @@ const fpsUsageHistory = new Store<{[key in Format]: number}>({
     }
   }
 });
+
+const migrateLegacyExportUsageHistory = () => {
+  const currentHistory = exportUsageHistory.store;
+  const hasLegacyDefaults = formats.every(format => {
+    const current = currentHistory[format];
+    const legacy = legacyExportUsageHistory[format];
+
+    if (!current) {
+      return false;
+    }
+
+    const hasOnlyDefaultPlugin = Object.keys(current.plugins).length === 1 && current.plugins.default === 1;
+    return current.lastUsed === legacy.lastUsed && hasOnlyDefaultPlugin;
+  });
+
+  if (hasLegacyDefaults) {
+    exportUsageHistory.store = defaultExportUsageHistory;
+  }
+};
+
+migrateLegacyExportUsageHistory();
 
 const saveService = builtinSavePlugin.shareServices[0];
 
