@@ -14,6 +14,11 @@ yarn dist
 
 The signed app appears in `dist/`.
 
+Requirements:
+
+- Apple silicon Mac (M-series, `arm64`)
+- macOS 11+
+
 ## How To Use Vello
 
 Click the menu bar icon to bring up the screen recorder. After selecting what portion of the screen you'd like to record, hit the record button to start recording. Click the menu bar icon again to stop the recording.

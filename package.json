@@ -3,6 +3,9 @@
   "productName": "Vello",
   "version": "3.6.0",
   "description": "A screen recorder built with web technology",
+  "cpu": [
+    "arm64"
+  ],
   "license": "MIT",
   "repository": "wulkano/kap",
   "homepage": "https://getkap.co",

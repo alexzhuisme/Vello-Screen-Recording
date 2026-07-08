@@ -19,12 +19,13 @@ type SharePlugin = {
 const isFormatMuted = (format: Format) => ['gif', 'apng'].includes(format);
 
 const EXPORT_FPS_CHOICES = [30, 60] as const;
+type ExportFpsChoice = (typeof EXPORT_FPS_CHOICES)[number];
 
 /** Picks 30 or 60, nearest to the hint (history / source fps). */
 const resolveExportFps = (originalFps: number, preferred?: number): number => {
   const hint = preferred ?? Math.min(originalFps, 60);
 
-  let best = EXPORT_FPS_CHOICES[0];
+  let best: ExportFpsChoice = EXPORT_FPS_CHOICES[0];
   for (const n of EXPORT_FPS_CHOICES) {
     if (Math.abs(n - hint) < Math.abs(best - hint)) {
       best = n;
@@ -76,7 +77,7 @@ const useOptions = () => {
   };
 
   const updateFormat = (formatName: Format) => {
-    debouncedUpdateFpsUsage.flush();
+    debouncedUpdateFpsUsage?.flush();
 
     if (metadata.hasAudio) {
       if (isFormatMuted(formatName) && !isFormatMuted(format)) {
@@ -88,19 +89,30 @@ const useOptions = () => {
     }
 
     const formatOption = formats.find(f => f.format === formatName);
+    if (!formatOption) {
+      return;
+    }
+
     const selectedSharePlugin = formatOption.plugins.find(plugin => {
       return (
-        plugin.pluginName === sharePlugin.pluginName &&
-        plugin.title === sharePlugin.serviceTitle &&
-        (plugin.apps?.some(app => app.url === sharePlugin.app?.url) ?? true)
+        plugin.pluginName === sharePlugin?.pluginName &&
+        plugin.title === sharePlugin?.serviceTitle &&
+        (plugin.apps?.some(app => app.url === sharePlugin?.app?.url) ?? true)
       );
     }) ?? formatOption.plugins[0];
 
     setFormat(formatName);
+
+    if (!selectedSharePlugin) {
+      setSharePlugin(undefined);
+      updateFps(resolveExportFps(originalFps, fpsHistory[formatName]), formatName);
+      return;
+    }
+
     setSharePlugin({
       pluginName: selectedSharePlugin.pluginName,
       serviceTitle: selectedSharePlugin.title,
-      app: selectedSharePlugin.apps ? sharePlugin.app : undefined
+      app: selectedSharePlugin.apps?.find(app => app.url === sharePlugin?.app?.url)
     });
     updateFps(resolveExportFps(originalFps, fpsHistory[formatName]), formatName);
   };

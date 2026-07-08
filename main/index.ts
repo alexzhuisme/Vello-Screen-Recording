@@ -1,4 +1,4 @@
-import {app} from 'electron';
+import {app, dialog} from 'electron';
 import {enforceMacOSAppLocation} from 'electron-util';
 import log from 'electron-log';
 import {autoUpdater} from 'electron-updater';
@@ -27,6 +27,7 @@ import {registerIpcHandlers} from './ipc-handlers';
 const filesToOpen: string[] = [];
 
 let onExitCleanupComplete = false;
+const isSupportedMacArchitecture = process.platform !== 'darwin' || process.arch === 'arm64';
 
 app.commandLine.appendSwitch('--enable-features', 'OverlayScrollbar');
 
@@ -68,6 +69,16 @@ const checkForUpdates = () => {
 // Prepare the renderer once the app is ready
 (async () => {
   await app.whenReady();
+
+  if (!isSupportedMacArchitecture) {
+    dialog.showErrorBox(
+      'Unsupported Mac Architecture',
+      'Vello now supports only Apple silicon (M-series) Macs. Please install the Apple silicon build.'
+    );
+    app.quit();
+    return;
+  }
+
   require('./utils/errors').setupErrorHandling();
 
   // Initialize remote states
