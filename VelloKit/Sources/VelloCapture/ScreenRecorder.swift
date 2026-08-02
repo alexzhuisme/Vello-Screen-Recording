@@ -74,7 +74,7 @@ public final class ScreenRecorder {
 
     /// - Parameter includedWindowIDs: Windows that should still appear in the
     ///   recording even though the rest of this app is excluded — used for the
-    ///   click-highlight overlays.
+    ///   click-highlight overlays. Ignored for window capture targets.
     public func start(
         _ configuration: RecordingConfiguration,
         includedWindowIDs: [CGWindowID] = []
@@ -91,36 +91,17 @@ public final class ScreenRecorder {
                 false,
                 onScreenWindowsOnly: false
             )
-            guard let display = content.displays.first(where: { $0.displayID == configuration.displayID })
-            else { throw RecordingError.displayUnavailable }
 
-            // Keep Vello's own overlay and windows out of the capture, except for
-            // any click-highlight windows the caller asked to include.
-            let ownApplications = content.applications.filter {
-                $0.bundleIdentifier == Bundle.main.bundleIdentifier
-            }
-            let includedWindows = content.windows.filter { includedWindowIDs.contains($0.windowID) }
-            let filter = SCContentFilter(
-                display: display,
-                excludingApplications: ownApplications,
-                exceptingWindows: includedWindows
-            )
-
-            let scaleFactor = NSScreen.screens
-                .first { $0.displayID == configuration.displayID }?
-                .backingScaleFactor ?? 2
-
-            let regionInPoints = configuration.cropRect
-                ?? CGRect(x: 0, y: 0, width: CGFloat(display.width), height: CGFloat(display.height))
-            let pixelSize = CGSize(
-                width: Self.evenPixels(regionInPoints.width * scaleFactor),
-                height: Self.evenPixels(regionInPoints.height * scaleFactor)
+            let resolved = try Self.resolveCapture(
+                configuration.target,
+                content: content,
+                includedWindowIDs: includedWindowIDs
             )
 
             let outputURL = TemporaryFiles.newRecordingURL()
             let writer = try SampleWriter(
                 url: outputURL,
-                pixelSize: pixelSize,
+                pixelSize: resolved.pixelSize,
                 frameRate: configuration.frameRate,
                 includesAudio: configuration.recordsAudio
             )
@@ -133,11 +114,11 @@ public final class ScreenRecorder {
 
             let streamConfiguration = Self.makeStreamConfiguration(
                 configuration,
-                pixelSize: pixelSize,
-                regionInPoints: regionInPoints
+                pixelSize: resolved.pixelSize,
+                sourceRect: resolved.sourceRect
             )
 
-            let stream = SCStream(filter: filter, configuration: streamConfiguration, delegate: adapter)
+            let stream = SCStream(filter: resolved.filter, configuration: streamConfiguration, delegate: adapter)
             try stream.addStreamOutput(adapter, type: .screen, sampleHandlerQueue: writer.queue)
             if configuration.recordsAudio {
                 try stream.addStreamOutput(adapter, type: .microphone, sampleHandlerQueue: writer.queue)
@@ -152,7 +133,9 @@ public final class ScreenRecorder {
             timeline.start()
             state = .recording
 
-            Log.capture.info("Recording started at \(pixelSize.width, privacy: .public)x\(pixelSize.height, privacy: .public)")
+            Log.capture.info(
+                "Recording started at \(resolved.pixelSize.width, privacy: .public)x\(resolved.pixelSize.height, privacy: .public)"
+            )
         } catch {
             await teardown()
             state = .idle
@@ -209,6 +192,74 @@ public final class ScreenRecorder {
 
     // MARK: - Helpers
 
+    private struct ResolvedCapture {
+        let filter: SCContentFilter
+        let pixelSize: CGSize
+        /// Display-local source rect for region capture; `nil` for window / full display.
+        let sourceRect: CGRect?
+    }
+
+    private static func resolveCapture(
+        _ target: CaptureTarget,
+        content: SCShareableContent,
+        includedWindowIDs: [CGWindowID]
+    ) throws -> ResolvedCapture {
+        switch target {
+        case let .display(displayID, cropRect):
+            guard let display = content.displays.first(where: { $0.displayID == displayID })
+            else { throw RecordingError.displayUnavailable }
+
+            // Keep Vello's own overlay and windows out of the capture, except for
+            // any click-highlight windows the caller asked to include.
+            let ownApplications = content.applications.filter {
+                $0.bundleIdentifier == Bundle.main.bundleIdentifier
+            }
+            let includedWindows = content.windows.filter { includedWindowIDs.contains($0.windowID) }
+            let filter = SCContentFilter(
+                display: display,
+                excludingApplications: ownApplications,
+                exceptingWindows: includedWindows
+            )
+
+            let scaleFactor = NSScreen.screens
+                .first { $0.displayID == displayID }?
+                .backingScaleFactor ?? 2
+
+            let regionInPoints = cropRect
+                ?? CGRect(x: 0, y: 0, width: CGFloat(display.width), height: CGFloat(display.height))
+            let pixelSize = CGSize(
+                width: evenPixels(regionInPoints.width * scaleFactor),
+                height: evenPixels(regionInPoints.height * scaleFactor)
+            )
+
+            return ResolvedCapture(
+                filter: filter,
+                pixelSize: pixelSize,
+                sourceRect: cropRect != nil ? regionInPoints : nil
+            )
+
+        case let .window(windowID):
+            guard let window = content.windows.first(where: { $0.windowID == windowID })
+            else { throw RecordingError.windowUnavailable }
+
+            let filter = SCContentFilter(desktopIndependentWindow: window)
+            let scaleFactor = scaleFactor(for: window.frame)
+            let pixelSize = CGSize(
+                width: evenPixels(window.frame.width * scaleFactor),
+                height: evenPixels(window.frame.height * scaleFactor)
+            )
+
+            return ResolvedCapture(filter: filter, pixelSize: pixelSize, sourceRect: nil)
+        }
+    }
+
+    private static func scaleFactor(for globalFrame: CGRect) -> CGFloat {
+        let center = CGPoint(x: globalFrame.midX, y: globalFrame.midY)
+        let screen = NSScreen.screens.first { $0.frame.contains(center) }
+            ?? NSScreen.main
+        return screen?.backingScaleFactor ?? 2
+    }
+
     private func teardown() async {
         if let stream {
             try? await stream.stopCapture()
@@ -235,7 +286,7 @@ public final class ScreenRecorder {
     private static func makeStreamConfiguration(
         _ configuration: RecordingConfiguration,
         pixelSize: CGSize,
-        regionInPoints: CGRect
+        sourceRect: CGRect?
     ) -> SCStreamConfiguration {
         let streamConfiguration = SCStreamConfiguration()
         streamConfiguration.width = Int(pixelSize.width)
@@ -251,8 +302,8 @@ public final class ScreenRecorder {
         streamConfiguration.scalesToFit = false
         streamConfiguration.capturesAudio = false
 
-        if configuration.cropRect != nil {
-            streamConfiguration.sourceRect = regionInPoints
+        if let sourceRect {
+            streamConfiguration.sourceRect = sourceRect
         }
 
         if let audioDeviceID = configuration.audioDeviceID {

@@ -18,8 +18,7 @@ struct ScreenRecorderTests {
     private func makeConfiguration(cropRect: CGRect?) throws -> RecordingConfiguration {
         let displayID = try #require(NSScreen.main?.displayID, "no main display")
         return RecordingConfiguration(
-            displayID: displayID,
-            cropRect: cropRect,
+            target: .display(displayID: displayID, cropRect: cropRect),
             frameRate: 30,
             showsCursor: false,
             audioDeviceID: nil

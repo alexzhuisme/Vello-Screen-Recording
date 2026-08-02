@@ -3,8 +3,8 @@ import VelloCapture
 import VelloCore
 import VelloUI
 
-/// Floating controls beneath the capture region: size presets, the record button,
-/// and the microphone and cursor toggles.
+/// Floating controls beneath the capture region: size presets / window label,
+/// the record button, and the microphone and cursor toggles.
 struct CropperActionBar: View {
     @Bindable var model: CropperModel
 
@@ -12,7 +12,7 @@ struct CropperActionBar: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            sizeControl
+            leadingControl
             Spacer(minLength: 12)
             recordButton
             Spacer(minLength: 12)
@@ -31,7 +31,17 @@ struct CropperActionBar: View {
         .shadow(color: .black.opacity(0.35), radius: 18, y: 6)
     }
 
-    // MARK: - Size
+    // MARK: - Leading
+
+    @ViewBuilder
+    private var leadingControl: some View {
+        switch model.selectionMode {
+        case .region:
+            sizeControl
+        case .window:
+            windowLabel
+        }
+    }
 
     private var sizeControl: some View {
         Menu {
@@ -53,6 +63,20 @@ struct CropperActionBar: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Choose a preset size")
+    }
+
+    private var windowLabel: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(model.windowSummary)
+                .font(.system(size: 13, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text("\(Int(model.selectionPixelSize.width)) × \(Int(model.selectionPixelSize.height)) px")
+                .font(.system(size: 10).monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: 168, alignment: .leading)
+        .help(model.windowSummary)
     }
 
     private static let presets: [(label: String, size: CGSize)] = [
@@ -154,13 +178,15 @@ struct CropperActionBar: View {
                 }
             }
 
-            Button {
-                settings.highlightClicks.toggle()
-            } label: {
-                if settings.highlightClicks {
-                    Label("Highlight Clicks", systemImage: "checkmark")
-                } else {
-                    Text("Highlight Clicks")
+            if model.selectionMode == .region {
+                Button {
+                    settings.highlightClicks.toggle()
+                } label: {
+                    if settings.highlightClicks {
+                        Label("Highlight Clicks", systemImage: "checkmark")
+                    } else {
+                        Text("Highlight Clicks")
+                    }
                 }
             }
         } label: {
@@ -175,14 +201,14 @@ struct CropperActionBar: View {
     }
 
     private var cursorMenuSymbol: String {
-        if settings.highlightClicks {
+        if model.selectionMode == .region, settings.highlightClicks {
             return "hand.tap.fill"
         }
         return settings.showsCursor ? "cursorarrow" : "cursorarrow.slash"
     }
 
     private var cursorMenuHelp: String {
-        if settings.highlightClicks {
+        if model.selectionMode == .region, settings.highlightClicks {
             return "Cursor visible, clicks highlighted"
         }
         return settings.showsCursor

@@ -1,0 +1,155 @@
+import CoreGraphics
+import Foundation
+import Testing
+import VelloCapture
+import VelloUI
+
+@Suite("WindowGeometry")
+struct WindowGeometryTests {
+    private let display = CaptureDisplay(
+        id: 1,
+        frame: CGRect(x: 100, y: 200, width: 800, height: 600),
+        scaleFactor: 2,
+        localizedName: "Test"
+    )
+
+    @Test("Global window frames convert into display-local top-left coordinates")
+    func convertsGlobalFrameToDisplayLocal() {
+        let global = CGRect(x: 150, y: 250, width: 200, height: 100)
+        let local = WindowGeometry.displayLocalFrame(global, on: display)
+
+        #expect(local.origin.x == 50)
+        #expect(local.origin.y == 450)
+        #expect(local.size == CGSize(width: 200, height: 100))
+    }
+
+    @Test("Capture resolution skips high-layer overlays then picks the front capturable window")
+    func skipsUtilityLayersThenPicksFrontWindow() {
+        let appStore = CaptureWindow(
+            id: 10,
+            title: "App Store",
+            applicationName: "App Store",
+            bundleIdentifier: "com.apple.AppStore",
+            processID: 42,
+            frame: CGRect(x: 100, y: 100, width: 800, height: 600)
+        )
+        let behind = CaptureWindow(
+            id: 11,
+            title: "Typeless",
+            applicationName: "Typeless",
+            bundleIdentifier: "app.typeless",
+            processID: 7,
+            frame: CGRect(x: 150, y: 150, width: 500, height: 400)
+        )
+
+        let point = CGPoint(x: 400, y: 300)
+        let hits = [
+            WindowServerHit(
+                windowID: 99,
+                ownerPID: 1,
+                layer: 25,
+                frame: CGRect(x: 0, y: 0, width: 1500, height: 1000)
+            ),
+            WindowServerHit(
+                windowID: appStore.id,
+                ownerPID: appStore.processID,
+                layer: 0,
+                frame: appStore.frame
+            ),
+            WindowServerHit(
+                windowID: behind.id,
+                ownerPID: behind.processID,
+                layer: 0,
+                frame: behind.frame
+            )
+        ]
+
+        let resolved = WindowGeometry.captureWindow(
+            at: point,
+            hitsFrontToBack: hits,
+            in: [appStore, behind]
+        )
+        #expect(resolved?.id == appStore.id)
+        #expect(resolved?.frame == appStore.frame)
+    }
+
+    @Test("Floating Status panels promote to the app's main layer-0 window")
+    func promotesFloatingStatusToMainWindow() {
+        let main = CaptureWindow(
+            id: 10898,
+            title: "Typeless",
+            applicationName: "Typeless",
+            bundleIdentifier: "app.typeless",
+            processID: 38954,
+            frame: CGRect(x: 314, y: 146, width: 1080, height: 750)
+        )
+        let status = CaptureWindow(
+            id: 10899,
+            title: "Status",
+            applicationName: "Typeless",
+            bundleIdentifier: "app.typeless",
+            processID: 38954,
+            frame: CGRect(x: 368, y: 482, width: 750, height: 500)
+        )
+
+        let point = CGPoint(x: 700, y: 600)
+        let hits = [
+            WindowServerHit(
+                windowID: status.id,
+                ownerPID: status.processID,
+                layer: 4,
+                frame: status.frame
+            ),
+            WindowServerHit(
+                windowID: main.id,
+                ownerPID: main.processID,
+                layer: 0,
+                frame: main.frame
+            )
+        ]
+
+        let resolved = WindowGeometry.captureWindow(
+            at: point,
+            hitsFrontToBack: hits,
+            in: [status, main]
+        )
+        #expect(resolved?.id == main.id)
+        #expect(resolved?.frame == main.frame)
+    }
+
+    @Test("Unknown child surfaces promote to the capturable window of the same process")
+    func promotesUnknownChildToSameProcessWindow() {
+        let appStore = CaptureWindow(
+            id: 10,
+            title: "App Store",
+            applicationName: "App Store",
+            bundleIdentifier: "com.apple.AppStore",
+            processID: 42,
+            frame: CGRect(x: 100, y: 100, width: 800, height: 600)
+        )
+
+        let point = CGPoint(x: 400, y: 300)
+        let hits = [
+            WindowServerHit(
+                windowID: 555,
+                ownerPID: 42,
+                layer: 0,
+                frame: CGRect(x: 200, y: 200, width: 400, height: 300)
+            ),
+            WindowServerHit(
+                windowID: appStore.id,
+                ownerPID: appStore.processID,
+                layer: 0,
+                frame: appStore.frame
+            )
+        ]
+
+        let resolved = WindowGeometry.captureWindow(
+            at: point,
+            hitsFrontToBack: hits,
+            in: [appStore]
+        )
+        #expect(resolved?.id == appStore.id)
+        #expect(resolved?.frame == appStore.frame)
+    }
+}

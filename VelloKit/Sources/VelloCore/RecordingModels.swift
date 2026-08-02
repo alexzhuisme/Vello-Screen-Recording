@@ -1,15 +1,19 @@
 import CoreGraphics
 import Foundation
 
+/// What to capture: a region of a display, or a single application window.
+public enum CaptureTarget: Sendable, Equatable {
+    /// Cropping is applied within this display. `cropRect` is display-local
+    /// points with a top-left origin; `nil` captures the entire display.
+    case display(displayID: CGDirectDisplayID, cropRect: CGRect?)
+
+    /// True window capture via ScreenCaptureKit — follows the window as it moves.
+    case window(windowID: CGWindowID)
+}
+
 /// Everything needed to start a capture session.
 public struct RecordingConfiguration: Sendable, Equatable {
-    /// Display to capture. Cropping is applied within this display.
-    public var displayID: CGDirectDisplayID
-
-    /// Region to capture in display-local points with a top-left origin.
-    /// `nil` captures the entire display.
-    public var cropRect: CGRect?
-
+    public var target: CaptureTarget
     public var frameRate: Int
     public var showsCursor: Bool
 
@@ -17,14 +21,12 @@ public struct RecordingConfiguration: Sendable, Equatable {
     public var audioDeviceID: String?
 
     public init(
-        displayID: CGDirectDisplayID,
-        cropRect: CGRect? = nil,
+        target: CaptureTarget,
         frameRate: Int = 30,
         showsCursor: Bool = true,
         audioDeviceID: String? = nil
     ) {
-        self.displayID = displayID
-        self.cropRect = cropRect
+        self.target = target
         self.frameRate = frameRate
         self.showsCursor = showsCursor
         self.audioDeviceID = audioDeviceID

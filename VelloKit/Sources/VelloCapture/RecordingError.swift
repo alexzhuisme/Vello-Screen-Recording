@@ -3,6 +3,7 @@ import Foundation
 public enum RecordingError: LocalizedError, Equatable {
     case screenRecordingPermissionDenied
     case displayUnavailable
+    case windowUnavailable
     case alreadyRecording
     case notRecording
     case emptyRecording
@@ -15,6 +16,8 @@ public enum RecordingError: LocalizedError, Equatable {
             "Vello needs Screen Recording permission to capture your screen."
         case .displayUnavailable:
             "The selected display is no longer available."
+        case .windowUnavailable:
+            "The selected window is no longer available."
         case .alreadyRecording:
             "A recording is already in progress."
         case .notRecording:

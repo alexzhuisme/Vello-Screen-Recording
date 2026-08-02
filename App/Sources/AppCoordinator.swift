@@ -46,8 +46,8 @@ final class AppCoordinator {
     }
 
     private func wireCropper() {
-        cropperModel.onStartRecording = { [weak self] displayID, rect in
-            self?.startRecording(displayID: displayID, cropRect: rect)
+        cropperModel.onStartRecording = { [weak self] target in
+            self?.startRecording(target)
         }
         cropperModel.onCancel = { [weak self] in self?.hideCropper() }
         cropperModel.onOpenPreferences = { [weak self] in
@@ -112,33 +112,38 @@ final class AppCoordinator {
 
     // MARK: - Recording
 
-    private func startRecording(displayID: CGDirectDisplayID, cropRect: CGRect) {
+    private func startRecording(_ target: CaptureTarget) {
         Task {
             let audioDeviceID = await resolveMicrophone()
 
-            // Highlight overlays must exist before the stream starts so their
-            // window IDs can be excepted into the content filter.
+            // Click highlights only work on display streams (window capture
+            // records a single SCWindow, so Vello overlays never appear).
             let includedWindowIDs: [CGWindowID]
-            if settings.highlightClicks {
+            let isWindowTarget: Bool
+            if case .window = target {
+                isWindowTarget = true
+                includedWindowIDs = []
+            } else if settings.highlightClicks {
+                isWindowTarget = false
                 clickHighlighter.start()
                 // Give WindowServer a beat to publish the new windows to SCK.
                 try? await Task.sleep(for: .milliseconds(50))
                 includedWindowIDs = clickHighlighter.windowIDs
             } else {
+                isWindowTarget = false
                 includedWindowIDs = []
             }
 
             let configuration = RecordingConfiguration(
-                displayID: displayID,
-                cropRect: cropRect,
+                target: target,
                 frameRate: settings.recordingFrameRate,
-                showsCursor: settings.showsCursor || settings.highlightClicks,
+                showsCursor: settings.showsCursor || (!isWindowTarget && settings.highlightClicks),
                 audioDeviceID: audioDeviceID
             )
 
             do {
                 try await recorder.start(configuration, includedWindowIDs: includedWindowIDs)
-                cropperController.setRecording(true)
+                cropperController.setRecording(true, hidesOverlay: isWindowTarget)
                 statusItemController.apply(state: .recording)
             } catch {
                 clickHighlighter.stop()
