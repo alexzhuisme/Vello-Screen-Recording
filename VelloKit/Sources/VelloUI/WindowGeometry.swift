@@ -89,8 +89,11 @@ public enum WindowGeometry {
 
     /// Resolves the capture target under the cursor.
     ///
-    /// Walks WindowServer z-order, skips utility layers, and prefers each app's
-    /// main (`layer == 0`) window over floating panels (Typeless Status, etc.).
+    /// Walks WindowServer z-order and only considers normal app windows
+    /// (`layer == 0`). Floating panels (Typeless Status at layer 4, etc.) are
+    /// skipped so they cannot steal the hit from the app underneath — promoting
+    /// a floater to its own process's main window was wrong when another app
+    /// sat between them in z-order.
     public static func captureWindow(
         at point: CGPoint,
         hitsFrontToBack: [WindowServerHit],
@@ -99,17 +102,7 @@ public enum WindowGeometry {
         let byID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
 
         for hit in hitsFrontToBack {
-            guard (0...8).contains(hit.layer) else { continue }
-
-            // Floating panels (layer > 0) often sit above the real window and have
-            // inset frames. Prefer that process's largest capturable layer-0 window.
-            if let main = mainWindow(
-                forProcess: hit.ownerPID,
-                hitsFrontToBack: hitsFrontToBack,
-                byID: byID
-            ) {
-                return main
-            }
+            guard hit.layer == 0 else { continue }
 
             if let exact = byID[hit.windowID] {
                 return exact.withFrame(hit.frame)
@@ -121,21 +114,6 @@ public enum WindowGeometry {
             }
         }
         return nil
-    }
-
-    /// Largest layer-0 capturable window for `pid` that appears in the live hit list.
-    private static func mainWindow(
-        forProcess pid: pid_t,
-        hitsFrontToBack: [WindowServerHit],
-        byID: [CGWindowID: CaptureWindow]
-    ) -> CaptureWindow? {
-        let layerZero = hitsFrontToBack.compactMap { hit -> CaptureWindow? in
-            guard hit.layer == 0, hit.ownerPID == pid, let window = byID[hit.windowID] else {
-                return nil
-            }
-            return window.withFrame(hit.frame)
-        }
-        return layerZero.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
     }
 
     private static func largestWindow(

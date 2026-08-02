@@ -33,6 +33,13 @@ struct CropperOverlayView: View {
             && model.selectedWindow.map { $0.frame.intersects(display.frame) } == true
     }
 
+    private var showsModeHint: Bool {
+        guard isActive, !model.isRecording else { return false }
+        // Region always starts with a default rect, so don't gate on hasSelection.
+        if isWindowMode, model.selectedWindow != nil { return false }
+        return true
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             interactionLayer
@@ -56,7 +63,10 @@ struct CropperOverlayView: View {
                 }
             }
 
-            if isActive, !model.hasSelection, model.highlightedWindow == nil, !model.isRecording {
+            // Mode switch hint stays up in region mode even with a default
+            // selection — otherwise "Press Space to capture a window" never
+            // appears. In window mode it yields once a window is confirmed.
+            if showsModeHint {
                 hint
             }
         }

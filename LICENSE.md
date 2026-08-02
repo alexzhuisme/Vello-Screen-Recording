@@ -22,7 +22,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-The historical Electron build's third-party notices live at
-[archive/electron/THIRD_PARTY_NOTICES.md](archive/electron/THIRD_PARTY_NOTICES.md).
-The native Swift app does not bundle ffmpeg, gifsicle, or Electron.

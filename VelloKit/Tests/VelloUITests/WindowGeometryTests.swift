@@ -98,8 +98,8 @@ struct WindowGeometryTests {
         #expect(resolved?.frame == appStore.frame)
     }
 
-    @Test("Floating Status panels promote to the app's main layer-0 window")
-    func promotesFloatingStatusToMainWindow() {
+    @Test("Floating Status panels are skipped so the layer-0 window underneath wins")
+    func skipsFloatingStatusForLayerZeroUnderneath() {
         let main = CaptureWindow(
             id: 10898,
             title: "Typeless",
@@ -140,6 +140,64 @@ struct WindowGeometryTests {
         )
         #expect(resolved?.id == main.id)
         #expect(resolved?.frame == main.frame)
+    }
+
+    @Test("Floating Status over another app does not steal the hit for Typeless behind it")
+    func floatingStatusDoesNotSkipInterveningApp() {
+        let typeless = CaptureWindow(
+            id: 10898,
+            title: "Typeless",
+            applicationName: "Typeless",
+            bundleIdentifier: "app.typeless",
+            processID: 38954,
+            frame: CGRect(x: 100, y: 100, width: 1200, height: 800)
+        )
+        let status = CaptureWindow(
+            id: 10899,
+            title: "Status",
+            applicationName: "Typeless",
+            bundleIdentifier: "app.typeless",
+            processID: 38954,
+            frame: CGRect(x: 200, y: 200, width: 750, height: 500)
+        )
+        let codex = CaptureWindow(
+            id: 42,
+            title: "Codex",
+            applicationName: "Cursor",
+            bundleIdentifier: "com.todesktop.230313mzl4w4u92",
+            processID: 99,
+            frame: CGRect(x: 150, y: 120, width: 900, height: 700)
+        )
+
+        let point = CGPoint(x: 400, y: 400)
+        let hits = [
+            WindowServerHit(
+                windowID: status.id,
+                ownerPID: status.processID,
+                layer: 4,
+                frame: status.frame
+            ),
+            WindowServerHit(
+                windowID: codex.id,
+                ownerPID: codex.processID,
+                layer: 0,
+                frame: codex.frame
+            ),
+            WindowServerHit(
+                windowID: typeless.id,
+                ownerPID: typeless.processID,
+                layer: 0,
+                frame: typeless.frame
+            )
+        ]
+
+        let resolved = WindowGeometry.captureWindow(
+            at: point,
+            hitsFrontToBack: hits,
+            in: [status, typeless, codex]
+        )
+        #expect(resolved?.id == codex.id)
+        #expect(resolved?.applicationName == "Cursor")
     }
 
     @Test("Unknown child surfaces promote to the capturable window of the same process")

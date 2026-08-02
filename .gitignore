@@ -11,7 +11,7 @@ xcuserdata/
 # OS
 .DS_Store
 
-# Archive leftovers (do not reintroduce the Electron tree to the root)
+# Local leftovers from the old Electron tree
 node_modules/
 dist/
 dist-js/
