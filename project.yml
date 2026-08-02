@@ -1,6 +1,6 @@
 name: Vello
 options:
-  bundleIdPrefix: app.vello
+  bundleIdPrefix: com.yueming
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -44,7 +44,7 @@ targets:
     settings:
       base:
         PRODUCT_NAME: Vello
-        PRODUCT_BUNDLE_IDENTIFIER: app.vello.Vello
+        PRODUCT_BUNDLE_IDENTIFIER: com.yueming.Vello.VDH5V96VHH
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "1"
         INFOPLIST_FILE: App/Resources/Info.plist

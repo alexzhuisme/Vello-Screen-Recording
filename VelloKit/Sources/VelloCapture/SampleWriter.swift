@@ -7,7 +7,7 @@ import VelloCore
 /// Every member is confined to `queue`, which is also the sample handler queue
 /// handed to `SCStream`, so incoming buffers are already correctly isolated.
 final class SampleWriter: @unchecked Sendable {
-    let queue = DispatchQueue(label: "app.vello.capture.writer", qos: .userInitiated)
+    let queue = DispatchQueue(label: "com.yueming.Vello.capture.writer", qos: .userInitiated)
 
     private let writer: AVAssetWriter
     private let videoInput: AVAssetWriterInput
