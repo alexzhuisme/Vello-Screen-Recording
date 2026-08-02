@@ -23,6 +23,31 @@ struct WindowGeometryTests {
         #expect(local.size == CGSize(width: 200, height: 100))
     }
 
+    @Test("Quartz top-left window bounds flip into AppKit bottom-left coordinates")
+    func flipsCGWindowBoundsToAppKit() {
+        // Primary display is 1512×982; a window 69pt from the top with height 909
+        // bottoms out at AppKit y = 982 - 69 - 909 = 4.
+        let primaryHeight: CGFloat = 982
+        let cgBounds = CGRect(x: 264, y: 69, width: 1161, height: 909)
+        let appKit = CaptureDevices.appKitFrame(
+            fromCGWindowBounds: cgBounds,
+            primaryDisplayHeight: primaryHeight
+        )
+
+        #expect(appKit.origin.x == 264)
+        #expect(appKit.origin.y == primaryHeight - 69 - 909)
+        #expect(appKit.size == cgBounds.size)
+
+        let main = CaptureDisplay(
+            id: 1,
+            frame: CGRect(x: 0, y: 0, width: 1512, height: primaryHeight),
+            scaleFactor: 2,
+            localizedName: "Main"
+        )
+        let local = WindowGeometry.displayLocalFrame(appKit, on: main)
+        #expect(local.origin.y == 69)
+    }
+
     @Test("Capture resolution skips high-layer overlays then picks the front capturable window")
     func skipsUtilityLayersThenPicksFrontWindow() {
         let appStore = CaptureWindow(

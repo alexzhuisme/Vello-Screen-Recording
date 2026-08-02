@@ -70,7 +70,9 @@ public enum WindowGeometry {
             let alpha = entry[kCGWindowAlpha as String] as? CGFloat ?? 1
             guard alpha > 0.05 else { continue }
 
-            let frame = CGRect(x: x, y: y, width: width, height: height)
+            let frame = CaptureDevices.appKitFrame(
+                fromCGWindowBounds: CGRect(x: x, y: y, width: width, height: height)
+            )
             guard frame.width >= 1, frame.height >= 1, frame.contains(point) else { continue }
 
             hits.append(
@@ -147,5 +149,10 @@ public enum WindowGeometry {
             $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height
         }) else { return nil }
         return best.withFrame(liveFrames[best.id] ?? best.frame)
+    }
+
+    /// Corner radius that visually matches standard macOS windows at typical sizes.
+    public static func windowCornerRadius(for frame: CGRect) -> CGFloat {
+        min(14, max(10, min(frame.width, frame.height) * 0.025))
     }
 }

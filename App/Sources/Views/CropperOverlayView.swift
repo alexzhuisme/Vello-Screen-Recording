@@ -51,10 +51,12 @@ struct CropperOverlayView: View {
                 selectionBorder(frame: highlight, recording: false)
                 if showsWindowActionBar {
                     actionBar(anchoredTo: highlight)
+                } else if let summary = model.highlightedWindowSummary {
+                    hoverLabel(summary, anchoredTo: highlight)
                 }
             }
 
-            if isActive, !model.hasSelection, !model.isRecording {
+            if isActive, !model.hasSelection, model.highlightedWindow == nil, !model.isRecording {
                 hint
             }
         }
@@ -114,17 +116,20 @@ struct CropperOverlayView: View {
             if showsRegionSelection {
                 path.addRect(selection)
             } else if let highlight = windowHighlight {
-                path.addRect(highlight)
+                let radius = WindowGeometry.windowCornerRadius(for: highlight)
+                path.addRoundedRect(in: highlight, cornerSize: CGSize(width: radius, height: radius))
             }
         }
         .fill(
             Color.black.opacity(model.isRecording ? 0.1 : 0.32),
             style: FillStyle(eoFill: true)
         )
+        .allowsHitTesting(false)
     }
 
     private func windowHighlightFill(_ frame: CGRect) -> some View {
-        Rectangle()
+        let radius = WindowGeometry.windowCornerRadius(for: frame)
+        return RoundedRectangle(cornerRadius: radius, style: .continuous)
             .fill(Color.white.opacity(model.selectedWindow == nil ? 0.08 : 0.04))
             .frame(width: frame.width, height: frame.height)
             .offset(x: frame.minX, y: frame.minY)
@@ -132,7 +137,10 @@ struct CropperOverlayView: View {
     }
 
     private func selectionBorder(frame: CGRect, recording: Bool) -> some View {
-        Rectangle()
+        let radius = model.selectionMode == .window
+            ? WindowGeometry.windowCornerRadius(for: frame)
+            : 0
+        return RoundedRectangle(cornerRadius: radius, style: .continuous)
             .strokeBorder(borderColor(recording: recording), lineWidth: recording ? 2 : 1)
             .frame(width: frame.width, height: frame.height)
             .offset(x: frame.minX, y: frame.minY)
@@ -174,6 +182,25 @@ struct CropperOverlayView: View {
         CropperActionBar(model: model)
             .frame(width: VelloMetrics.actionBarSize.width, height: VelloMetrics.actionBarSize.height)
             .offset(x: actionBarOrigin(for: frame).x, y: actionBarOrigin(for: frame).y)
+    }
+
+    /// Shown while hovering a window (before click) so the user knows which app is targeted.
+    private func hoverLabel(_ text: String, anchoredTo frame: CGRect) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.78), in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 3)
+            .fixedSize()
+            .offset(x: hoverLabelOrigin(for: frame, labelWidth: 220).x, y: hoverLabelOrigin(for: frame, labelWidth: 220).y)
+            .allowsHitTesting(false)
     }
 
     private var hint: some View {
@@ -268,6 +295,23 @@ struct CropperOverlayView: View {
         let x = min(
             max(bounds.minX + gap, frame.midX - size.width / 2),
             max(bounds.minX + gap, bounds.maxX - size.width - gap)
+        )
+        return CGPoint(x: x, y: y)
+    }
+
+    /// Sits just above the hovered window; falls below if there is no room.
+    private func hoverLabelOrigin(for frame: CGRect, labelWidth: CGFloat) -> CGPoint {
+        let labelHeight: CGFloat = 34
+        let gap: CGFloat = 10
+
+        var y = frame.minY - labelHeight - gap
+        if y < bounds.minY + gap {
+            y = frame.maxY + gap
+        }
+
+        let x = min(
+            max(bounds.minX + gap, frame.midX - labelWidth / 2),
+            max(bounds.minX + gap, bounds.maxX - labelWidth - gap)
         )
         return CGPoint(x: x, y: y)
     }

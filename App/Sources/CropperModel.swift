@@ -83,6 +83,7 @@ final class CropperModel {
     }
 
     /// Display-local top-left frame for the currently highlighted / selected window on `display`.
+    /// Uses WindowServer bounds as-is — guessing a shadow inset was clipping real chrome.
     func windowHighlightFrame(on display: CaptureDisplay) -> CGRect? {
         let global: CGRect?
         if let highlightFrame {
@@ -96,11 +97,17 @@ final class CropperModel {
         return WindowGeometry.displayLocalFrame(global, on: display)
     }
 
+    /// Label for the window under the cursor or the confirmed selection.
+    var highlightedWindowSummary: String? {
+        guard let window = highlightedWindow else { return nil }
+        if window.title.isEmpty || window.title == window.applicationName {
+            return window.applicationName
+        }
+        return "\(window.applicationName) — \(window.title)"
+    }
+
     var windowSummary: String {
-        guard let window = selectedWindow else { return "Select a window" }
-        let title = window.title
-        if title.isEmpty { return window.applicationName }
-        return "\(window.applicationName) — \(title)"
+        highlightedWindowSummary ?? "Select a window"
     }
 
     func prepare(displays: [CaptureDisplay], preferredDisplayID: CGDirectDisplayID?) {

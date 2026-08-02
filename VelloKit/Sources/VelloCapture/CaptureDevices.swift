@@ -143,7 +143,10 @@ public enum CaptureDevices {
         }
     }
 
-    /// Global bottom-left frames keyed by window number, from WindowServer.
+    /// Global AppKit (bottom-left) frames keyed by window number, from WindowServer.
+    ///
+    /// `kCGWindowBounds` uses a top-left origin on the primary display — convert
+    /// before comparing with `NSEvent.mouseLocation` / `NSScreen.frame`.
     public static func cgWindowFrames() -> [CGWindowID: CGRect] {
         guard let info = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements],
@@ -157,9 +160,29 @@ public enum CaptureDevices {
                   let x = bounds["X"], let y = bounds["Y"],
                   let width = bounds["Width"], let height = bounds["Height"]
             else { continue }
-            frames[CGWindowID(number)] = CGRect(x: x, y: y, width: width, height: height)
+            frames[CGWindowID(number)] = appKitFrame(
+                fromCGWindowBounds: CGRect(x: x, y: y, width: width, height: height)
+            )
         }
         return frames
+    }
+
+    /// Converts Quartz window bounds (top-left origin at the primary display) into
+    /// global AppKit coordinates (bottom-left origin).
+    public static func appKitFrame(
+        fromCGWindowBounds cgBounds: CGRect,
+        primaryDisplayHeight: CGFloat? = nil
+    ) -> CGRect {
+        let primaryHeight = primaryDisplayHeight
+            ?? NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height
+            ?? NSScreen.main?.frame.height
+            ?? cgBounds.height
+        return CGRect(
+            x: cgBounds.origin.x,
+            y: primaryHeight - cgBounds.origin.y - cgBounds.height,
+            width: cgBounds.width,
+            height: cgBounds.height
+        )
     }
 
     public static func audioInputDevices() -> [AudioInputDevice] {
