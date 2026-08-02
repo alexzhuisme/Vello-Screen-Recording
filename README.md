@@ -5,8 +5,9 @@ A native macOS screen recorder written in Swift.
 Vello lives in the menu bar. Pick a region, record, trim, and export to MP4,
 HEVC, GIF, or APNG — without Electron, Node, or a bundled ffmpeg.
 
-> The previous Electron app is preserved under [`archive/electron/`](archive/electron/)
-> for reference only. It is not the product anymore.
+> The previous Electron app is a **frozen archive** under
+> [`archive/electron/`](archive/electron/). It is not maintained and will not be
+> shipped to the Mac App Store. The product is this Swift app.
 
 ## Requirements
 
