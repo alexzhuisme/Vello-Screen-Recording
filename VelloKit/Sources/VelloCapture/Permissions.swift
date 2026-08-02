@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import CoreGraphics
+import ScreenCaptureKit
 import VelloCore
 
 public enum PermissionStatus: Sendable, Equatable {
@@ -12,9 +13,25 @@ public enum PermissionStatus: Sendable, Equatable {
 public enum Permissions {
     // MARK: - Screen recording
 
-    /// Whether screen capture is already authorized. Does not prompt.
+    /// Fast, non-prompting check. Can lag behind System Settings for Debug builds.
     public static var hasScreenRecordingAccess: Bool {
         CGPreflightScreenCaptureAccess()
+    }
+
+    /// Authoritative check: ask ScreenCaptureKit itself. Prefer this over
+    /// `CGPreflightScreenCaptureAccess`, which often stays false for Xcode
+    /// Debug binaries even after the Screen Recording toggle is On.
+    public static func verifyScreenRecordingAccess() async -> Bool {
+        if CGPreflightScreenCaptureAccess() { return true }
+        do {
+            _ = try await SCShareableContent.excludingDesktopWindows(
+                false,
+                onScreenWindowsOnly: true
+            )
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// Triggers the system prompt the first time it is called for this app.

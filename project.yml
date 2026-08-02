@@ -52,7 +52,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         # Screen recording permission is tied to a stable signing identity, so a
         # real team is needed rather than ad-hoc signing. Override for your own.
-        DEVELOPMENT_TEAM: TQ37U7943C
+        DEVELOPMENT_TEAM: VDH5V96VHH
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: YES
         COMBINE_HIDPI_IMAGES: YES

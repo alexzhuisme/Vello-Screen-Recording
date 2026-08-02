@@ -239,10 +239,13 @@ final class AppCoordinator {
     // MARK: - Permissions
 
     private func ensureScreenRecordingPermission() async -> Bool {
-        if Permissions.hasScreenRecordingAccess { return true }
+        // Prefer ScreenCaptureKit over CGPreflight — Debug builds often leave
+        // CGPreflight false even when the System Settings toggle is On.
+        if await Permissions.verifyScreenRecordingAccess() { return true }
 
-        // The first call surfaces the system prompt; later calls just report the answer.
-        if Permissions.requestScreenRecordingAccess() { return true }
+        // Surfaces the system prompt the first time; later calls only report.
+        _ = Permissions.requestScreenRecordingAccess()
+        if await Permissions.verifyScreenRecordingAccess() { return true }
 
         let alert = NSAlert()
         alert.messageText = "Vello needs permission to record your screen"
