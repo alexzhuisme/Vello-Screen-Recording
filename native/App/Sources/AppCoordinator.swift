@@ -8,6 +8,7 @@ import VelloUI
 final class AppCoordinator {
     private let settings = Settings.shared
     private let recorder = ScreenRecorder()
+    private let clickHighlighter = ClickHighlighter()
     private let cropperModel: CropperModel
     private let cropperController: CropperWindowController
     private let statusItemController: StatusItemController
@@ -58,6 +59,7 @@ final class AppCoordinator {
     private func wireRecorder() {
         recorder.onUnexpectedStop = { [weak self] error in
             guard let self else { return }
+            clickHighlighter.stop()
             cropperController.setRecording(false)
             cropperController.close()
             statusItemController.apply(state: .idle)
@@ -114,19 +116,32 @@ final class AppCoordinator {
         Task {
             let audioDeviceID = await resolveMicrophone()
 
+            // Highlight overlays must exist before the stream starts so their
+            // window IDs can be excepted into the content filter.
+            let includedWindowIDs: [CGWindowID]
+            if settings.highlightClicks {
+                clickHighlighter.start()
+                // Give WindowServer a beat to publish the new windows to SCK.
+                try? await Task.sleep(for: .milliseconds(50))
+                includedWindowIDs = clickHighlighter.windowIDs
+            } else {
+                includedWindowIDs = []
+            }
+
             let configuration = RecordingConfiguration(
                 displayID: displayID,
                 cropRect: cropRect,
                 frameRate: settings.recordingFrameRate,
-                showsCursor: settings.showsCursor,
+                showsCursor: settings.showsCursor || settings.highlightClicks,
                 audioDeviceID: audioDeviceID
             )
 
             do {
-                try await recorder.start(configuration)
+                try await recorder.start(configuration, includedWindowIDs: includedWindowIDs)
                 cropperController.setRecording(true)
                 statusItemController.apply(state: .recording)
             } catch {
+                clickHighlighter.stop()
                 cropperController.setRecording(false)
                 cropperController.close()
                 statusItemController.apply(state: .idle)
@@ -140,6 +155,7 @@ final class AppCoordinator {
 
         Task {
             defer {
+                clickHighlighter.stop()
                 cropperController.setRecording(false)
                 cropperController.close()
                 statusItemController.apply(state: .idle)
@@ -158,10 +174,12 @@ final class AppCoordinator {
         switch recorder.state {
         case .recording:
             recorder.pause()
+            clickHighlighter.setPaused(true)
             cropperModel.isPaused = true
             statusItemController.apply(state: .paused)
         case .paused:
             recorder.resume()
+            clickHighlighter.setPaused(false)
             cropperModel.isPaused = false
             statusItemController.apply(state: .recording)
         default:
@@ -172,6 +190,7 @@ final class AppCoordinator {
     /// Stops a recording during quit without opening an editor for it.
     func stopRecordingForTermination() async {
         guard recorder.state.isActive else { return }
+        clickHighlighter.stop()
         await recorder.cancel()
         cropperController.setRecording(false)
         cropperController.close()
@@ -227,17 +246,29 @@ final class AppCoordinator {
 
         let alert = NSAlert()
         alert.messageText = "Vello needs permission to record your screen"
+        // macOS binds Screen Recording permission to this process's code signature.
+        // Enabling the toggle is not enough while the current process is still running —
+        // TCC only takes effect after a full quit and relaunch.
         alert.informativeText = """
         Open System Settings › Privacy & Security › Screen & System Audio Recording \
-        and turn on Vello, then try again.
+        and turn on Vello.
+
+        If it is already on, quit Vello completely and open it again. Rebuilds from \
+        Xcode create a new signing identity, so each new Debug build may need its own \
+        toggle (or a freshly signed run).
         """
-        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Open Settings & Quit")
+        alert.addButton(withTitle: "Quit Vello")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
 
         NSApp.activate()
-        if alert.runModal() == .alertFirstButtonReturn {
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
             Permissions.openScreenRecordingSettings()
+            NSApp.terminate(nil)
+        } else if response == .alertSecondButtonReturn {
+            NSApp.terminate(nil)
         }
         return false
     }

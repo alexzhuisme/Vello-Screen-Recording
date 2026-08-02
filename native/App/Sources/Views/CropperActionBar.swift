@@ -85,7 +85,7 @@ struct CropperActionBar: View {
     private var trailingControls: some View {
         HStack(spacing: 6) {
             microphoneMenu
-            cursorToggle
+            cursorMenu
             optionsMenu
         }
     }
@@ -126,16 +126,52 @@ struct CropperActionBar: View {
         .help("Microphone: \(model.microphoneSummary)")
     }
 
-    private var cursorToggle: some View {
-        Button {
-            settings.showsCursor.toggle()
+    private var cursorMenu: some View {
+        Menu {
+            Button {
+                settings.showsCursor.toggle()
+            } label: {
+                if settings.showsCursor {
+                    Label("Show Cursor", systemImage: "checkmark")
+                } else {
+                    Text("Show Cursor")
+                }
+            }
+
+            Button {
+                settings.highlightClicks.toggle()
+            } label: {
+                if settings.highlightClicks {
+                    Label("Highlight Clicks", systemImage: "checkmark")
+                } else {
+                    Text("Highlight Clicks")
+                }
+            }
         } label: {
-            Image(systemName: settings.showsCursor ? "cursorarrow" : "cursorarrow.slash")
+            Image(systemName: cursorMenuSymbol)
                 .font(.system(size: 14))
                 .foregroundStyle(settings.showsCursor ? Color.accentColor : .secondary)
         }
-        .buttonStyle(.plain)
-        .help(settings.showsCursor ? "Cursor is visible in recordings" : "Cursor is hidden in recordings")
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(cursorMenuHelp)
+    }
+
+    private var cursorMenuSymbol: String {
+        if settings.highlightClicks {
+            return "hand.tap.fill"
+        }
+        return settings.showsCursor ? "cursorarrow" : "cursorarrow.slash"
+    }
+
+    private var cursorMenuHelp: String {
+        if settings.highlightClicks {
+            return "Cursor visible, clicks highlighted"
+        }
+        return settings.showsCursor
+            ? "Cursor is visible in recordings"
+            : "Cursor is hidden in recordings"
     }
 
     private var optionsMenu: some View {

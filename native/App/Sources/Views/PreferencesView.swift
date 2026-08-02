@@ -14,6 +14,9 @@ struct PreferencesView: View {
             Section("Recording") {
                 Toggle("Show cursor", isOn: $settings.showsCursor)
 
+                Toggle("Highlight clicks", isOn: $settings.highlightClicks)
+                    .help("Draws an expanding ring under each mouse click in the recording.")
+
                 Picker("Frame rate", selection: $settings.recordingFrameRate) {
                     Text("30 fps").tag(30)
                     Text("60 fps").tag(60)

@@ -11,7 +11,27 @@ public final class Settings {
 
     @ObservationIgnored private let defaults: UserDefaults
 
-    public var showsCursor: Bool { didSet { defaults.set(showsCursor, forKey: Key.showsCursor) } }
+    public var showsCursor: Bool {
+        didSet {
+            defaults.set(showsCursor, forKey: Key.showsCursor)
+            // Highlighting clicks with an invisible cursor is useless.
+            if !showsCursor, highlightClicks {
+                highlightClicks = false
+            }
+        }
+    }
+
+    /// Draws an expanding ring under each mouse click in the recording.
+    /// Enabling this also forces the cursor to stay visible, matching Kap's behaviour.
+    public var highlightClicks: Bool {
+        didSet {
+            defaults.set(highlightClicks, forKey: Key.highlightClicks)
+            if highlightClicks, !showsCursor {
+                showsCursor = true
+            }
+        }
+    }
+
     public var recordAudio: Bool { didSet { defaults.set(recordAudio, forKey: Key.recordAudio) } }
 
     public var audioInputDeviceID: String? {
@@ -68,6 +88,7 @@ public final class Settings {
         self.defaults = defaults
 
         showsCursor = defaults.object(forKey: Key.showsCursor) as? Bool ?? true
+        highlightClicks = defaults.bool(forKey: Key.highlightClicks)
         recordAudio = defaults.bool(forKey: Key.recordAudio)
         audioInputDeviceID = defaults.string(forKey: Key.audioInputDeviceID) ?? systemDefaultAudioDeviceID
         recordingFrameRate = defaults.object(forKey: Key.recordingFrameRate) as? Int ?? 30
@@ -85,6 +106,11 @@ public final class Settings {
             lastSelection = CGRect(x: stored[0], y: stored[1], width: stored[2], height: stored[3])
         } else {
             lastSelection = nil
+        }
+
+        // didSet does not run during init, so re-assert the Kap coupling here.
+        if highlightClicks {
+            showsCursor = true
         }
     }
 
@@ -126,6 +152,7 @@ public final class Settings {
 
     private enum Key {
         static let showsCursor = "showsCursor"
+        static let highlightClicks = "highlightClicks"
         static let recordAudio = "recordAudio"
         static let audioInputDeviceID = "audioInputDeviceID"
         static let recordingFrameRate = "recordingFrameRate"

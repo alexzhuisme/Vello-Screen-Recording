@@ -99,6 +99,8 @@ final class EditorModel: Identifiable {
 
             player.replaceCurrentItem(with: AVPlayerItem(asset: asset))
             observePlayback()
+            // Pin the playhead to the start so the scrubber indicator matches 0:00.
+            seek(to: 0)
             isLoaded = true
 
             await generateThumbnails(for: asset)

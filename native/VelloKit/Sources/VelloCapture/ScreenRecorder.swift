@@ -72,7 +72,13 @@ public final class ScreenRecorder {
 
     // MARK: - Lifecycle
 
-    public func start(_ configuration: RecordingConfiguration) async throws {
+    /// - Parameter includedWindowIDs: Windows that should still appear in the
+    ///   recording even though the rest of this app is excluded — used for the
+    ///   click-highlight overlays.
+    public func start(
+        _ configuration: RecordingConfiguration,
+        includedWindowIDs: [CGWindowID] = []
+    ) async throws {
         guard state == .idle else { throw RecordingError.alreadyRecording }
         guard Permissions.hasScreenRecordingAccess else {
             throw RecordingError.screenRecordingPermissionDenied
@@ -88,14 +94,16 @@ public final class ScreenRecorder {
             guard let display = content.displays.first(where: { $0.displayID == configuration.displayID })
             else { throw RecordingError.displayUnavailable }
 
-            // Keep Vello's own overlay and windows out of the capture.
+            // Keep Vello's own overlay and windows out of the capture, except for
+            // any click-highlight windows the caller asked to include.
             let ownApplications = content.applications.filter {
                 $0.bundleIdentifier == Bundle.main.bundleIdentifier
             }
+            let includedWindows = content.windows.filter { includedWindowIDs.contains($0.windowID) }
             let filter = SCContentFilter(
                 display: display,
                 excludingApplications: ownApplications,
-                exceptingWindows: []
+                exceptingWindows: includedWindows
             )
 
             let scaleFactor = NSScreen.screens
