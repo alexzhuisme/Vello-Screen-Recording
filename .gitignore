@@ -1,15 +1,21 @@
-node_modules
-/renderer/out
-/renderer/.next
-/app/dist
-/dist
-/dist-js
+# Xcode / SPM
+Vello.xcodeproj/
+.build/
+.swiftpm/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.xcscmblueprint
 
+# OS
 .DS_Store
 
-# Nested copy of the app (not part of the root package layout)
-/package/
+# Archive leftovers (do not reintroduce the Electron tree to the root)
+node_modules/
+dist/
+dist-js/
+*.tgz
 
-# LGPL ffmpeg placed locally for MAS packaging (see package/build/binaries/README.md)
-package/build/binaries/ffmpeg
-package/build/embedded.provisionprofile
+# Local signing material if dropped at the root by mistake
+*.provisionprofile

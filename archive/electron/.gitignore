@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-js/
+renderer/out/
+renderer/.next/
+*.tgz
+.DS_Store
+build/binaries/ffmpeg
+build/embedded.provisionprofile

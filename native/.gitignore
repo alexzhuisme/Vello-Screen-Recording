@@ -1,9 +1,0 @@
-# XcodeGen produces the project from project.yml
-Vello.xcodeproj/
-
-.build/
-.swiftpm/
-DerivedData/
-*.xcuserstate
-xcuserdata/
-.DS_Store

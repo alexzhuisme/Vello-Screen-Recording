@@ -1,38 +1,71 @@
-<p align="center">
-  <h3 align="center">Vello</h3>
-  <p align="center">A screen recorder built with web technology</p>
-</p>
+# Vello
 
-## Get Vello
+A native macOS screen recorder written in Swift.
 
-Build from source:
+Vello lives in the menu bar. Pick a region, record, trim, and export to MP4,
+HEVC, GIF, or APNG — without Electron, Node, or a bundled ffmpeg.
+
+> The previous Electron app is preserved under [`archive/electron/`](archive/electron/)
+> for reference only. It is not the product anymore.
+
+## Requirements
+
+- macOS 15 Sequoia or later
+- Xcode 26 or later
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
+
+## Build
 
 ```sh
-yarn install
-yarn dist
+xcodegen generate
+open Vello.xcodeproj
 ```
 
-The signed app appears in `dist/`.
+Or from the command line:
 
-Requirements:
+```sh
+xcodegen generate
+xcodebuild -project Vello.xcodeproj -scheme Vello -configuration Release build
+```
 
-- Apple silicon Mac (M-series, `arm64`)
-- macOS 11+
+`project.yml` pins `DEVELOPMENT_TEAM`. Change it to your team. Screen Recording
+permission is tied to the signing identity, so ad-hoc Debug builds will keep
+re-prompting.
 
-## How To Use Vello
+## Test
 
-Click the menu bar icon to bring up the screen recorder. After selecting what portion of the screen you'd like to record, hit the record button to start recording. Click the menu bar icon again to stop the recording.
+```sh
+cd VelloKit
+swift test
+```
 
-> Tip: While recording, Option-click the menu bar icon to pause or right-click for more options.
+Export tests synthesize a short clip and run the real encoders. Capture tests
+drive a live `SCStream` and skip themselves when Screen Recording permission is
+missing.
 
-## Contribute
+## Layout
 
-Read the [contribution guide](contributing.md).
+```
+App/           Menu bar app, cropper, editor, preferences
+VelloKit/      Testable packages: capture, export, settings, UI geometry
+project.yml    XcodeGen spec
+archive/       Historical Electron Vello (not shipped)
+```
 
-## Plugins
+## How it works
 
-For more info on how to create plugins, read the [plugins docs](docs/plugins.md).
+**Capture.** `SCStream` records the chosen display (optionally cropped), writes
+H.264 through `AVAssetWriter`, and can take microphone audio on the same stream
+on macOS 15+. Pause subtracts the paused span from later timestamps so the file
+timeline stays continuous. Optional click ripples are drawn on overlay windows
+that are excepted into the capture filter.
 
-## Acknowledgements
+**Export.** Trim, resize, frame rate, and mute go through `AVAssetExportSession`
+for MP4 / HEVC. GIF and APNG are rendered with `AVAssetImageGenerator` + ImageIO.
 
-Vello is a fork of [Kap](https://github.com/wulkano/kap), originally created by [Wulkano](https://wulkano.com). Many thanks to the original authors and contributors.
+**Sandbox.** The app is sandboxed. Exports use a save panel or a security-scoped
+bookmark for a folder you chose once.
+
+## License
+
+MIT. See [LICENSE.md](LICENSE.md) and [PRIVACY.md](PRIVACY.md).
