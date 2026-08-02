@@ -6,3 +6,10 @@ node_modules
 /dist-js
 
 .DS_Store
+
+# Nested copy of the app (not part of the root package layout)
+/package/
+
+# LGPL ffmpeg placed locally for MAS packaging (see package/build/binaries/README.md)
+package/build/binaries/ffmpeg
+package/build/embedded.provisionprofile
