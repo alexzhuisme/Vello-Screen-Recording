@@ -95,7 +95,11 @@ struct CropperActionBar: View {
             Button {
                 settings.recordAudio = false
             } label: {
-                Label("Off", systemImage: settings.recordAudio ? "" : "checkmark")
+                if !settings.recordAudio {
+                    Label("Off", systemImage: "checkmark")
+                } else {
+                    Text("Off")
+                }
             }
 
             Divider()
@@ -104,7 +108,11 @@ struct CropperActionBar: View {
                 settings.recordAudio = true
                 settings.audioInputDeviceID = systemDefaultAudioDeviceID
             } label: {
-                Text("System Default")
+                if isSelectedMicrophone(systemDefaultAudioDeviceID) {
+                    Label("System Default", systemImage: "checkmark")
+                } else {
+                    Text("System Default")
+                }
             }
 
             ForEach(model.audioInputDevices) { device in
@@ -112,7 +120,11 @@ struct CropperActionBar: View {
                     settings.recordAudio = true
                     settings.audioInputDeviceID = device.id
                 } label: {
-                    Text(device.name)
+                    if isSelectedMicrophone(device.id) {
+                        Label(device.name, systemImage: "checkmark")
+                    } else {
+                        Text(device.name)
+                    }
                 }
             }
         } label: {
@@ -124,6 +136,10 @@ struct CropperActionBar: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Microphone: \(model.microphoneSummary)")
+    }
+
+    private func isSelectedMicrophone(_ deviceID: String) -> Bool {
+        settings.recordAudio && settings.audioInputDeviceID == deviceID
     }
 
     private var cursorMenu: some View {

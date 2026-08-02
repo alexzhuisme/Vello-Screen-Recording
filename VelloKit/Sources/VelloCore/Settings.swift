@@ -91,7 +91,7 @@ public final class Settings {
         highlightClicks = defaults.bool(forKey: Key.highlightClicks)
         recordAudio = defaults.bool(forKey: Key.recordAudio)
         audioInputDeviceID = defaults.string(forKey: Key.audioInputDeviceID) ?? systemDefaultAudioDeviceID
-        recordingFrameRate = defaults.object(forKey: Key.recordingFrameRate) as? Int ?? 30
+        recordingFrameRate = defaults.object(forKey: Key.recordingFrameRate) as? Int ?? 60
         loopAnimatedExports = defaults.object(forKey: Key.loopAnimatedExports) as? Bool ?? true
         defaultExportFormat = defaults.string(forKey: Key.defaultExportFormat)
             .flatMap(ExportFormat.init(rawValue:)) ?? .mp4
