@@ -1,0 +1,64 @@
+name: Vello
+options:
+  bundleIdPrefix: app.vello
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  VelloKit:
+    path: VelloKit
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    ARCHS: arm64
+    ALWAYS_SEARCH_USER_PATHS: NO
+    CLANG_ENABLE_OBJC_ARC: YES
+    GCC_NO_COMMON_BLOCKS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Vello:
+    type: application
+    platform: macOS
+    sources:
+      - path: App/Sources
+      - path: App/Resources
+        buildPhase: resources
+        excludes:
+          - Info.plist
+          - Vello.entitlements
+    dependencies:
+      - package: VelloKit
+        product: VelloCore
+      - package: VelloKit
+        product: VelloCapture
+      - package: VelloKit
+        product: VelloExport
+      - package: VelloKit
+        product: VelloUI
+    settings:
+      base:
+        PRODUCT_NAME: Vello
+        PRODUCT_BUNDLE_IDENTIFIER: app.vello.Vello
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        INFOPLIST_FILE: App/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Resources/Vello.entitlements
+        CODE_SIGN_STYLE: Automatic
+        # Screen recording permission is tied to a stable signing identity, so a
+        # real team is needed rather than ad-hoc signing. Override for your own.
+        DEVELOPMENT_TEAM: TQ37U7943C
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: YES
+        COMBINE_HIDPI_IMAGES: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        LD_RUNPATH_SEARCH_PATHS:
+          - "$(inherited)"
+          - "@executable_path/../Frameworks"
