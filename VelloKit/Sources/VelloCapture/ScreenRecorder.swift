@@ -27,8 +27,10 @@ private final class StreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDeleg
             // Idle frames repeat the previous image and carry no new content.
             guard Self.isCompleteFrame(sampleBuffer) else { return }
             writer.appendVideo(sampleBuffer)
+        case .audio:
+            writer.appendSystemAudio(sampleBuffer)
         case .microphone:
-            writer.appendAudio(sampleBuffer)
+            writer.appendMicrophoneAudio(sampleBuffer)
         default:
             break
         }
@@ -103,7 +105,8 @@ public final class ScreenRecorder {
                 url: outputURL,
                 pixelSize: resolved.pixelSize,
                 frameRate: configuration.frameRate,
-                includesAudio: configuration.recordsAudio
+                includesSystemAudio: configuration.recordsSystemAudio,
+                includesMicrophone: configuration.recordsMicrophone
             )
 
             let adapter = StreamOutputAdapter(writer: writer) { [weak self] error in
@@ -120,7 +123,10 @@ public final class ScreenRecorder {
 
             let stream = SCStream(filter: resolved.filter, configuration: streamConfiguration, delegate: adapter)
             try stream.addStreamOutput(adapter, type: .screen, sampleHandlerQueue: writer.queue)
-            if configuration.recordsAudio {
+            if configuration.recordsSystemAudio {
+                try stream.addStreamOutput(adapter, type: .audio, sampleHandlerQueue: writer.queue)
+            }
+            if configuration.recordsMicrophone {
                 try stream.addStreamOutput(adapter, type: .microphone, sampleHandlerQueue: writer.queue)
             }
 
@@ -283,7 +289,7 @@ public final class ScreenRecorder {
         }
     }
 
-    private static func makeStreamConfiguration(
+    static func makeStreamConfiguration(
         _ configuration: RecordingConfiguration,
         pixelSize: CGSize,
         sourceRect: CGRect?
@@ -300,13 +306,17 @@ public final class ScreenRecorder {
         streamConfiguration.colorSpaceName = CGColorSpace.sRGB
         streamConfiguration.queueDepth = 8
         streamConfiguration.scalesToFit = false
-        streamConfiguration.capturesAudio = false
+        streamConfiguration.capturesAudio = configuration.recordsSystemAudio
+        streamConfiguration.sampleRate = 48_000
+        streamConfiguration.channelCount = 2
+        // Prevent Vello's editor or UI sounds from feeding back into a capture.
+        streamConfiguration.excludesCurrentProcessAudio = true
 
         if let sourceRect {
             streamConfiguration.sourceRect = sourceRect
         }
 
-        if let audioDeviceID = configuration.audioDeviceID {
+        if configuration.recordsMicrophone, let audioDeviceID = configuration.audioDeviceID {
             streamConfiguration.captureMicrophone = true
             streamConfiguration.microphoneCaptureDeviceID = audioDeviceID
         }

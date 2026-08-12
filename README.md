@@ -51,10 +51,11 @@ project.yml    XcodeGen spec
 ## How it works
 
 **Capture.** `SCStream` records the chosen display (optionally cropped), writes
-H.264 through `AVAssetWriter`, and can take microphone audio on the same stream
-on macOS 15+. Pause subtracts the paused span from later timestamps so the file
-timeline stays continuous. Optional click ripples are drawn on overlay windows
-that are excepted into the capture filter.
+H.264 through `AVAssetWriter`, and can capture system audio, microphone audio,
+or both on macOS 15+. The two sources use separate synchronized tracks that are
+mixed during video export. Pause subtracts the paused span from later timestamps
+so the file timeline stays continuous. Optional click ripples are drawn on
+overlay windows that are excepted into the capture filter.
 
 **Export.** Trim, resize, frame rate, and mute go through `AVAssetExportSession`
 for MP4 / HEVC. GIF and APNG are rendered with `AVAssetImageGenerator` + ImageIO.

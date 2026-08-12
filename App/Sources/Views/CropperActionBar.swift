@@ -4,7 +4,7 @@ import VelloCore
 import VelloUI
 
 /// Floating controls beneath the capture region: size presets / window label,
-/// the record button, and the microphone and cursor toggles.
+/// the record button, and the audio and cursor toggles.
 struct CropperActionBar: View {
     @Bindable var model: CropperModel
 
@@ -108,62 +108,74 @@ struct CropperActionBar: View {
 
     private var trailingControls: some View {
         HStack(spacing: 6) {
-            microphoneMenu
+            audioMenu
             cursorMenu
             optionsMenu
         }
     }
 
-    private var microphoneMenu: some View {
+    private var audioMenu: some View {
         Menu {
-            Button {
-                settings.recordAudio = false
-            } label: {
-                if !settings.recordAudio {
-                    Label("Off", systemImage: "checkmark")
-                } else {
-                    Text("Off")
+            ForEach(AudioCaptureMode.allCases) { mode in
+                Button {
+                    settings.audioCaptureMode = mode
+                } label: {
+                    if settings.audioCaptureMode == mode {
+                        Label(mode.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(mode.displayName)
+                    }
                 }
             }
 
             Divider()
 
-            Button {
-                settings.recordAudio = true
-                settings.audioInputDeviceID = systemDefaultAudioDeviceID
-            } label: {
-                if isSelectedMicrophone(systemDefaultAudioDeviceID) {
-                    Label("System Default", systemImage: "checkmark")
-                } else {
-                    Text("System Default")
-                }
-            }
-
-            ForEach(model.audioInputDevices) { device in
+            Menu("Input Device") {
                 Button {
-                    settings.recordAudio = true
-                    settings.audioInputDeviceID = device.id
+                    settings.audioInputDeviceID = systemDefaultAudioDeviceID
                 } label: {
-                    if isSelectedMicrophone(device.id) {
-                        Label(device.name, systemImage: "checkmark")
+                    if isSelectedMicrophone(systemDefaultAudioDeviceID) {
+                        Label("System Default", systemImage: "checkmark")
                     } else {
-                        Text(device.name)
+                        Text("System Default")
+                    }
+                }
+
+                ForEach(model.audioInputDevices) { device in
+                    Button {
+                        settings.audioInputDeviceID = device.id
+                    } label: {
+                        if isSelectedMicrophone(device.id) {
+                            Label(device.name, systemImage: "checkmark")
+                        } else {
+                            Text(device.name)
+                        }
                     }
                 }
             }
+            .disabled(!settings.audioCaptureMode.includesMicrophone)
         } label: {
-            Image(systemName: settings.recordAudio ? "mic.fill" : "mic.slash")
+            Image(systemName: audioMenuSymbol)
                 .font(.system(size: 14))
-                .foregroundStyle(settings.recordAudio ? Color.accentColor : .secondary)
+                .foregroundStyle(settings.audioCaptureMode.recordsAudio ? Color.accentColor : .secondary)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .help("Microphone: \(model.microphoneSummary)")
+        .help("Audio: \(model.audioSummary)")
     }
 
     private func isSelectedMicrophone(_ deviceID: String) -> Bool {
-        settings.recordAudio && settings.audioInputDeviceID == deviceID
+        settings.audioInputDeviceID == deviceID
+    }
+
+    private var audioMenuSymbol: String {
+        switch settings.audioCaptureMode {
+        case .off: "speaker.slash"
+        case .systemAudio: "speaker.wave.2.fill"
+        case .microphone: "mic.fill"
+        case .systemAudioAndMicrophone: "waveform.badge.mic"
+        }
     }
 
     private var cursorMenu: some View {

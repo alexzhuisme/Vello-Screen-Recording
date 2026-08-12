@@ -32,7 +32,9 @@ public final class Settings {
         }
     }
 
-    public var recordAudio: Bool { didSet { defaults.set(recordAudio, forKey: Key.recordAudio) } }
+    public var audioCaptureMode: AudioCaptureMode {
+        didSet { defaults.set(audioCaptureMode.rawValue, forKey: Key.audioCaptureMode) }
+    }
 
     public var audioInputDeviceID: String? {
         didSet { defaults.set(audioInputDeviceID, forKey: Key.audioInputDeviceID) }
@@ -89,7 +91,13 @@ public final class Settings {
 
         showsCursor = defaults.object(forKey: Key.showsCursor) as? Bool ?? true
         highlightClicks = defaults.bool(forKey: Key.highlightClicks)
-        recordAudio = defaults.bool(forKey: Key.recordAudio)
+        if let storedMode = defaults.string(forKey: Key.audioCaptureMode)
+            .flatMap(AudioCaptureMode.init(rawValue:)) {
+            audioCaptureMode = storedMode
+        } else {
+            // Migrate the original microphone-only preference.
+            audioCaptureMode = defaults.bool(forKey: Key.recordAudio) ? .microphone : .off
+        }
         audioInputDeviceID = defaults.string(forKey: Key.audioInputDeviceID) ?? systemDefaultAudioDeviceID
         recordingFrameRate = defaults.object(forKey: Key.recordingFrameRate) as? Int ?? 60
         loopAnimatedExports = defaults.object(forKey: Key.loopAnimatedExports) as? Bool ?? true
@@ -116,7 +124,7 @@ public final class Settings {
 
     /// Microphone to record with, or `nil` when audio is disabled.
     public var effectiveAudioDeviceID: String? {
-        guard recordAudio else { return nil }
+        guard audioCaptureMode.includesMicrophone else { return nil }
         return audioInputDeviceID
     }
 
@@ -153,6 +161,8 @@ public final class Settings {
     private enum Key {
         static let showsCursor = "showsCursor"
         static let highlightClicks = "highlightClicks"
+        static let audioCaptureMode = "audioCaptureMode"
+        /// Retained only to migrate preferences written by builds before audio modes.
         static let recordAudio = "recordAudio"
         static let audioInputDeviceID = "audioInputDeviceID"
         static let recordingFrameRate = "recordingFrameRate"

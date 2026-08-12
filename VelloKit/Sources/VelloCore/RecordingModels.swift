@@ -11,28 +11,64 @@ public enum CaptureTarget: Sendable, Equatable {
     case window(windowID: CGWindowID)
 }
 
+/// Audio sources captured alongside the screen recording.
+public enum AudioCaptureMode: String, Sendable, Hashable, CaseIterable, Identifiable {
+    case off
+    case systemAudio
+    case microphone
+    case systemAudioAndMicrophone
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .off: "Off"
+        case .systemAudio: "System Audio"
+        case .microphone: "Microphone"
+        case .systemAudioAndMicrophone: "System Audio + Microphone"
+        }
+    }
+
+    public var includesSystemAudio: Bool {
+        self == .systemAudio || self == .systemAudioAndMicrophone
+    }
+
+    public var includesMicrophone: Bool {
+        self == .microphone || self == .systemAudioAndMicrophone
+    }
+
+    public var recordsAudio: Bool { self != .off }
+}
+
 /// Everything needed to start a capture session.
 public struct RecordingConfiguration: Sendable, Equatable {
     public var target: CaptureTarget
     public var frameRate: Int
     public var showsCursor: Bool
 
-    /// Unique ID of the microphone to record, or `nil` for no audio.
+    public var audioMode: AudioCaptureMode
+
+    /// Unique ID of the microphone to record. Ignored when `audioMode` does not
+    /// include microphone capture.
     public var audioDeviceID: String?
 
     public init(
         target: CaptureTarget,
         frameRate: Int = 30,
         showsCursor: Bool = true,
+        audioMode: AudioCaptureMode = .off,
         audioDeviceID: String? = nil
     ) {
         self.target = target
         self.frameRate = frameRate
         self.showsCursor = showsCursor
+        self.audioMode = audioMode
         self.audioDeviceID = audioDeviceID
     }
 
-    public var recordsAudio: Bool { audioDeviceID != nil }
+    public var recordsSystemAudio: Bool { audioMode.includesSystemAudio }
+    public var recordsMicrophone: Bool { audioMode.includesMicrophone && audioDeviceID != nil }
+    public var recordsAudio: Bool { recordsSystemAudio || recordsMicrophone }
 }
 
 public enum RecordingState: Sendable, Equatable {

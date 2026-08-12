@@ -115,6 +115,7 @@ final class AppCoordinator {
     private func startRecording(_ target: CaptureTarget) {
         Task {
             let audioDeviceID = await resolveMicrophone()
+            let audioMode = resolvedAudioMode(microphoneDeviceID: audioDeviceID)
 
             // Click highlights only work on display streams (window capture
             // records a single SCWindow, so Vello overlays never appear).
@@ -138,6 +139,7 @@ final class AppCoordinator {
                 target: target,
                 frameRate: settings.recordingFrameRate,
                 showsCursor: settings.showsCursor || (!isWindowTarget && settings.highlightClicks),
+                audioMode: audioMode,
                 audioDeviceID: audioDeviceID
             )
 
@@ -278,7 +280,7 @@ final class AppCoordinator {
     /// Returns the device to record, prompting for access the first time and
     /// silently continuing without audio if the user declines.
     private func resolveMicrophone() async -> String? {
-        guard settings.recordAudio else { return nil }
+        guard settings.audioCaptureMode.includesMicrophone else { return nil }
 
         if Permissions.microphoneStatus == .notDetermined {
             _ = await Permissions.requestMicrophoneAccess()
@@ -288,6 +290,15 @@ final class AppCoordinator {
             return nil
         }
         return CaptureDevices.resolveAudioDeviceID(settings.audioInputDeviceID)
+    }
+
+    /// If microphone access is unavailable, keep system audio when the user
+    /// selected Both and otherwise continue silently, matching the previous UX.
+    private func resolvedAudioMode(microphoneDeviceID: String?) -> AudioCaptureMode {
+        guard settings.audioCaptureMode.includesMicrophone, microphoneDeviceID == nil else {
+            return settings.audioCaptureMode
+        }
+        return settings.audioCaptureMode.includesSystemAudio ? .systemAudio : .off
     }
 
     // MARK: - Errors

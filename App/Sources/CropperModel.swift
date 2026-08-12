@@ -265,15 +265,27 @@ final class CropperModel {
         }
     }
 
-    // MARK: - Microphone
+    // MARK: - Audio
 
-    var microphoneSummary: String {
-        guard settings.recordAudio else { return "Off" }
+    var selectedMicrophoneName: String {
         let stored = settings.audioInputDeviceID
         if stored == systemDefaultAudioDeviceID {
             return CaptureDevices.defaultAudioInputDevice()?.name ?? "System Default"
         }
         return audioInputDevices.first { $0.id == stored }?.name ?? "System Default"
+    }
+
+    var audioSummary: String {
+        switch settings.audioCaptureMode {
+        case .off:
+            "Off"
+        case .systemAudio:
+            "System Audio"
+        case .microphone:
+            "Microphone: \(selectedMicrophoneName)"
+        case .systemAudioAndMicrophone:
+            "System Audio + Microphone: \(selectedMicrophoneName)"
+        }
     }
 
     func refreshAudioDevices() {

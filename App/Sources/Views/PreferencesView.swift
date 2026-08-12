@@ -22,7 +22,11 @@ struct PreferencesView: View {
                     Text("60 fps").tag(60)
                 }
 
-                Toggle("Record microphone", isOn: $settings.recordAudio)
+                Picker("Audio", selection: $settings.audioCaptureMode) {
+                    ForEach(AudioCaptureMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
 
                 Picker("Input device", selection: audioDeviceBinding) {
                     Text("System Default").tag(systemDefaultAudioDeviceID)
@@ -30,7 +34,7 @@ struct PreferencesView: View {
                         Text(device.name).tag(device.id)
                     }
                 }
-                .disabled(!settings.recordAudio)
+                .disabled(!settings.audioCaptureMode.includesMicrophone)
             }
 
             Section("Exports") {

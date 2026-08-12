@@ -15,14 +15,84 @@ struct ScreenRecorderTests {
     /// skipped with a clear reason rather than failing on an unprepared machine.
     nonisolated static var canCapture: Bool { Permissions.hasScreenRecordingAccess }
 
-    private func makeConfiguration(cropRect: CGRect?) throws -> RecordingConfiguration {
+    private func makeConfiguration(
+        cropRect: CGRect?,
+        audioMode: AudioCaptureMode = .off
+    ) throws -> RecordingConfiguration {
         let displayID = try #require(NSScreen.main?.displayID, "no main display")
         return RecordingConfiguration(
             target: .display(displayID: displayID, cropRect: cropRect),
             frameRate: 30,
             showsCursor: false,
+            audioMode: audioMode,
             audioDeviceID: nil
         )
+    }
+
+    @Test("Stream configuration enables exactly the selected audio sources")
+    func configuresAudioSources() {
+        let target = CaptureTarget.display(displayID: 1, cropRect: nil)
+        let size = CGSize(width: 320, height: 240)
+
+        let off = ScreenRecorder.makeStreamConfiguration(
+            RecordingConfiguration(target: target),
+            pixelSize: size,
+            sourceRect: nil
+        )
+        #expect(!off.capturesAudio)
+        #expect(!off.captureMicrophone)
+        #expect(off.excludesCurrentProcessAudio)
+
+        let system = ScreenRecorder.makeStreamConfiguration(
+            RecordingConfiguration(target: target, audioMode: .systemAudio),
+            pixelSize: size,
+            sourceRect: nil
+        )
+        #expect(system.capturesAudio)
+        #expect(!system.captureMicrophone)
+        #expect(system.sampleRate == 48_000)
+        #expect(system.channelCount == 2)
+
+        let microphone = ScreenRecorder.makeStreamConfiguration(
+            RecordingConfiguration(
+                target: target,
+                audioMode: .microphone,
+                audioDeviceID: "input-device"
+            ),
+            pixelSize: size,
+            sourceRect: nil
+        )
+        #expect(!microphone.capturesAudio)
+        #expect(microphone.captureMicrophone)
+        #expect(microphone.microphoneCaptureDeviceID == "input-device")
+
+        let both = ScreenRecorder.makeStreamConfiguration(
+            RecordingConfiguration(
+                target: target,
+                audioMode: .systemAudioAndMicrophone,
+                audioDeviceID: "input-device"
+            ),
+            pixelSize: size,
+            sourceRect: nil
+        )
+        #expect(both.capturesAudio)
+        #expect(both.captureMicrophone)
+    }
+
+    @Test("The capture writer accepts separate system and microphone tracks")
+    func createsDualAudioWriter() throws {
+        let url = TemporaryFiles.newRecordingURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let writer = try SampleWriter(
+            url: url,
+            pixelSize: CGSize(width: 320, height: 240),
+            frameRate: 30,
+            includesSystemAudio: true,
+            includesMicrophone: true
+        )
+        writer.cancel()
+        writer.queue.sync {}
     }
 
     @Test(
@@ -55,6 +125,27 @@ struct ScreenRecorderTests {
 
         let duration = try await asset.load(.duration).seconds
         #expect(duration > 0.4, "expected roughly a second of video, got \(duration)")
+    }
+
+    @Test(
+        "System audio capture writes an audio track",
+        .enabled(if: canCapture, "Screen & System Audio Recording permission is not granted")
+    )
+    func recordsSystemAudio() async throws {
+        let recorder = ScreenRecorder()
+        let configuration = try makeConfiguration(
+            cropRect: CGRect(x: 0, y: 0, width: 320, height: 240),
+            audioMode: .systemAudio
+        )
+
+        try await recorder.start(configuration)
+        try await Task.sleep(for: .milliseconds(1200))
+
+        let recording = try await recorder.stop()
+        defer { try? FileManager.default.removeItem(at: recording.url) }
+
+        let audioTracks = try await AVURLAsset(url: recording.url).loadTracks(withMediaType: .audio)
+        #expect(audioTracks.count == 1)
     }
 
     @Test(
@@ -100,6 +191,8 @@ struct ScreenRecorderTests {
             try await recorder.start(configuration)
         }
 
+        // Give ScreenCaptureKit time to deliver at least one complete frame.
+        try await Task.sleep(for: .milliseconds(250))
         let recording = try await recorder.stop()
         try? FileManager.default.removeItem(at: recording.url)
     }

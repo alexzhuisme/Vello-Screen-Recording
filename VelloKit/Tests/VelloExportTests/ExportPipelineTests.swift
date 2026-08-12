@@ -81,6 +81,33 @@ struct ExportPipelineTests {
         #expect(codecs.contains { $0 == kCMVideoCodecType_HEVC })
     }
 
+    @Test("System and microphone tracks are mixed into the exported movie")
+    func mixesMultipleAudioTracks() async throws {
+        let source = try await makeSourceWithTwoAudioTracks()
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let sourceAsset = AVURLAsset(url: source)
+        #expect(try await sourceAsset.loadTracks(withMediaType: .audio).count == 2)
+
+        let destination = TemporaryFiles.newExportURL(fileExtension: "mp4")
+        defer { try? FileManager.default.removeItem(at: destination) }
+
+        let options = ExportOptions(
+            format: .mp4,
+            startTime: 0,
+            endTime: 1,
+            size: Self.sourceSize,
+            frameRate: 30,
+            isMuted: false,
+            loops: false
+        )
+
+        try await Exporter.export(source: source, to: destination, options: options) { _ in }
+
+        let exportedTracks = try await AVURLAsset(url: destination).loadTracks(withMediaType: .audio)
+        #expect(exportedTracks.count == 1, "the two captured sources should become one compatible mix")
+    }
+
     @Test("Exporting to GIF writes one frame per requested interval")
     func exportsGIF() async throws {
         let source = try await makeSourceVideo()
@@ -221,6 +248,83 @@ struct ExportPipelineTests {
         return url
     }
 
+    /// Packages the video fixture with two independent PCM tones, matching the
+    /// separate system-audio and microphone tracks written during capture.
+    private func makeSourceWithTwoAudioTracks() async throws -> URL {
+        let videoURL = try await makeSourceVideo()
+        let systemAudioURL = try makeToneWAV(frequency: 440)
+        let microphoneURL = try makeToneWAV(frequency: 660)
+        defer {
+            try? FileManager.default.removeItem(at: videoURL)
+            try? FileManager.default.removeItem(at: systemAudioURL)
+            try? FileManager.default.removeItem(at: microphoneURL)
+        }
+
+        let videoAsset = AVURLAsset(url: videoURL)
+        let systemAudioAsset = AVURLAsset(url: systemAudioURL)
+        let microphoneAsset = AVURLAsset(url: microphoneURL)
+        let duration = CMTime(seconds: Self.sourceDuration, preferredTimescale: 600)
+        let range = CMTimeRange(start: .zero, duration: duration)
+        let composition = AVMutableComposition()
+
+        let sourceVideo = try #require(try await videoAsset.loadTracks(withMediaType: .video).first)
+        let videoTrack = try #require(composition.addMutableTrack(
+            withMediaType: .video,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ))
+        try videoTrack.insertTimeRange(range, of: sourceVideo, at: .zero)
+
+        for asset in [systemAudioAsset, microphoneAsset] {
+            let sourceAudio = try #require(try await asset.loadTracks(withMediaType: .audio).first)
+            let audioTrack = try #require(composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ))
+            try audioTrack.insertTimeRange(range, of: sourceAudio, at: .zero)
+        }
+
+        let url = TemporaryFiles.newExportURL(fileExtension: "mov")
+        try? FileManager.default.removeItem(at: url)
+        let session = try #require(AVAssetExportSession(
+            asset: composition,
+            presetName: AVAssetExportPresetPassthrough
+        ))
+        try await session.export(to: url, as: .mov)
+        return url
+    }
+
+    private func makeToneWAV(frequency: Double) throws -> URL {
+        let sampleRate = 48_000
+        let sampleCount = Int(Self.sourceDuration * Double(sampleRate))
+        var samples = Data(capacity: sampleCount * MemoryLayout<Int16>.size)
+
+        for index in 0..<sampleCount {
+            let phase = 2 * Double.pi * frequency * Double(index) / Double(sampleRate)
+            let amplitude = sin(phase) * 0.2 * Double(Int16.max)
+            samples.appendLittleEndian(Int16(amplitude.rounded()))
+        }
+
+        var wav = Data()
+        wav.appendASCII("RIFF")
+        wav.appendLittleEndian(UInt32(36 + samples.count))
+        wav.appendASCII("WAVE")
+        wav.appendASCII("fmt ")
+        wav.appendLittleEndian(UInt32(16))
+        wav.appendLittleEndian(UInt16(1)) // Linear PCM
+        wav.appendLittleEndian(UInt16(1)) // Mono
+        wav.appendLittleEndian(UInt32(sampleRate))
+        wav.appendLittleEndian(UInt32(sampleRate * MemoryLayout<Int16>.size))
+        wav.appendLittleEndian(UInt16(MemoryLayout<Int16>.size))
+        wav.appendLittleEndian(UInt16(16))
+        wav.appendASCII("data")
+        wav.appendLittleEndian(UInt32(samples.count))
+        wav.append(samples)
+
+        let url = TemporaryFiles.newExportURL(fileExtension: "wav")
+        try wav.write(to: url, options: .atomic)
+        return url
+    }
+
     private func makePixelBuffer(brightness: UInt8) throws -> CVPixelBuffer {
         var pixelBuffer: CVPixelBuffer?
         let status = CVPixelBufferCreate(
@@ -242,6 +346,17 @@ struct ExportPipelineTests {
             memset(base, Int32(brightness), length)
         }
         return buffer
+    }
+}
+
+private extension Data {
+    mutating func appendASCII(_ value: String) {
+        append(contentsOf: value.utf8)
+    }
+
+    mutating func appendLittleEndian<Value: FixedWidthInteger>(_ value: Value) {
+        var littleEndian = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndian) { append(contentsOf: $0) }
     }
 }
 

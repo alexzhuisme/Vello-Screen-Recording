@@ -26,14 +26,9 @@ public enum VideoExporter {
         let sourceRange = try await clampedRange(options.timeRange, in: asset)
         try videoTrack.insertTimeRange(sourceRange, of: sourceVideoTrack, at: .zero)
 
-        if options.producesAudio,
-           let sourceAudioTrack = try await asset.loadTracks(withMediaType: .audio).first,
-           let audioTrack = composition.addMutableTrack(
-               withMediaType: .audio,
-               preferredTrackID: kCMPersistentTrackID_Invalid
-           ) {
-            try audioTrack.insertTimeRange(sourceRange, of: sourceAudioTrack, at: .zero)
-        }
+        let audioMix = options.producesAudio
+            ? try await addAudioTracks(from: asset, to: composition, sourceRange: sourceRange)
+            : nil
 
         let videoComposition = try await makeVideoComposition(
             for: videoTrack,
@@ -50,6 +45,7 @@ public enum VideoExporter {
             throw ExportError.exportSessionUnavailable
         }
         session.videoComposition = videoComposition
+        session.audioMix = audioMix
         session.shouldOptimizeForNetworkUse = true
 
         try await runExport(session: session, to: destination, onProgress: onProgress)
@@ -102,6 +98,35 @@ public enum VideoExporter {
         videoComposition.instructions = [instruction]
 
         return videoComposition
+    }
+
+    /// Screen and microphone samples are recorded as separate tracks because
+    /// their source formats differ. Combine every captured track during export
+    /// so Both produces one normal, universally playable audio mix.
+    private static func addAudioTracks(
+        from asset: AVAsset,
+        to composition: AVMutableComposition,
+        sourceRange: CMTimeRange
+    ) async throws -> AVAudioMix? {
+        let sourceTracks = try await asset.loadTracks(withMediaType: .audio)
+        guard !sourceTracks.isEmpty else { return nil }
+
+        var parameters: [AVAudioMixInputParameters] = []
+        for sourceTrack in sourceTracks {
+            guard let compositionTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else { throw ExportError.exportSessionUnavailable }
+
+            try compositionTrack.insertTimeRange(sourceRange, of: sourceTrack, at: .zero)
+            let input = AVMutableAudioMixInputParameters(track: compositionTrack)
+            input.setVolume(1, at: .zero)
+            parameters.append(input)
+        }
+
+        let mix = AVMutableAudioMix()
+        mix.inputParameters = parameters
+        return mix
     }
 
     private static func runExport(

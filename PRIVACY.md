@@ -2,7 +2,7 @@
 
 **Vello** (“we”, “us”) respects your privacy. This policy describes what data the Vello macOS app may collect and how it is used.
 
-*Last updated: August 2, 2026*
+*Last updated: August 12, 2026*
 
 ## Summary
 
@@ -19,8 +19,9 @@ Vello stores preferences (for example recording options, keyboard shortcuts, and
 
 Vello may ask for:
 
-- **Screen Recording** — required to capture your screen
-- **Microphone** — only if you enable audio recording
+- **Screen & System Audio Recording** — required to capture your screen; system
+  audio is included only when you select it
+- **Microphone** — only when you select Microphone or System Audio + Microphone
 
 These permissions are managed by macOS. You can revoke them in System Settings → Privacy & Security.
 

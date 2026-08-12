@@ -11,7 +11,8 @@ final class SampleWriter: @unchecked Sendable {
 
     private let writer: AVAssetWriter
     private let videoInput: AVAssetWriterInput
-    private let audioInput: AVAssetWriterInput?
+    private let systemAudioInput: AVAssetWriterInput?
+    private let microphoneInput: AVAssetWriterInput?
 
     private var didStartSession = false
     private var isPaused = false
@@ -24,7 +25,13 @@ final class SampleWriter: @unchecked Sendable {
     /// Last timestamp seen, used to measure the pause gap on resume.
     private var lastSourceTime: CMTime = .zero
 
-    init(url: URL, pixelSize: CGSize, frameRate: Int, includesAudio: Bool) throws {
+    init(
+        url: URL,
+        pixelSize: CGSize,
+        frameRate: Int,
+        includesSystemAudio: Bool,
+        includesMicrophone: Bool
+    ) throws {
         writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
 
         let width = Int(pixelSize.width)
@@ -50,25 +57,16 @@ final class SampleWriter: @unchecked Sendable {
         }
         writer.add(videoInput)
 
-        if includesAudio {
-            let input = AVAssetWriterInput(
-                mediaType: .audio,
-                outputSettings: [
-                    AVFormatIDKey: kAudioFormatMPEG4AAC,
-                    AVNumberOfChannelsKey: 2,
-                    AVSampleRateKey: 48_000,
-                    AVEncoderBitRateKey: 128_000
-                ]
-            )
-            input.expectsMediaDataInRealTime = true
-            guard writer.canAdd(input) else {
-                throw RecordingError.writerFailed("the audio input was rejected")
-            }
-            writer.add(input)
-            audioInput = input
-        } else {
-            audioInput = nil
-        }
+        systemAudioInput = try Self.addAudioInput(
+            to: writer,
+            enabled: includesSystemAudio,
+            sourceName: "system audio"
+        )
+        microphoneInput = try Self.addAudioInput(
+            to: writer,
+            enabled: includesMicrophone,
+            sourceName: "microphone"
+        )
 
         guard writer.startWriting() else {
             throw RecordingError.writerFailed(writer.error?.localizedDescription ?? "could not start writing")
@@ -79,6 +77,30 @@ final class SampleWriter: @unchecked Sendable {
     private static func bitRate(width: Int, height: Int, frameRate: Int) -> Int {
         let estimate = Double(width * height * frameRate) * 0.11
         return Int(min(max(estimate, 2_000_000), 50_000_000))
+    }
+
+    private static func addAudioInput(
+        to writer: AVAssetWriter,
+        enabled: Bool,
+        sourceName: String
+    ) throws -> AVAssetWriterInput? {
+        guard enabled else { return nil }
+
+        let input = AVAssetWriterInput(
+            mediaType: .audio,
+            outputSettings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVNumberOfChannelsKey: 2,
+                AVSampleRateKey: 48_000,
+                AVEncoderBitRateKey: 128_000
+            ]
+        )
+        input.expectsMediaDataInRealTime = true
+        guard writer.canAdd(input) else {
+            throw RecordingError.writerFailed("the \(sourceName) input was rejected")
+        }
+        writer.add(input)
+        return input
     }
 
     // MARK: - Sample intake (called on `queue`)
@@ -108,7 +130,15 @@ final class SampleWriter: @unchecked Sendable {
         }
     }
 
-    func appendAudio(_ sampleBuffer: CMSampleBuffer) {
+    func appendSystemAudio(_ sampleBuffer: CMSampleBuffer) {
+        appendAudio(sampleBuffer, to: systemAudioInput)
+    }
+
+    func appendMicrophoneAudio(_ sampleBuffer: CMSampleBuffer) {
+        appendAudio(sampleBuffer, to: microphoneInput)
+    }
+
+    private func appendAudio(_ sampleBuffer: CMSampleBuffer, to audioInput: AVAssetWriterInput?) {
         guard let audioInput else { return }
         let sourceTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         guard sourceTime.isValid else { return }
@@ -149,7 +179,8 @@ final class SampleWriter: @unchecked Sendable {
                 }
 
                 self.videoInput.markAsFinished()
-                self.audioInput?.markAsFinished()
+                self.systemAudioInput?.markAsFinished()
+                self.microphoneInput?.markAsFinished()
 
                 // The completion handler fires on an arbitrary queue, so hop back
                 // to ours before touching the writer again.

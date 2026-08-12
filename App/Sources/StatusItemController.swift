@@ -131,7 +131,7 @@ final class StatusItemController: NSObject {
         menu.addItem(item(title: "About Vello") { [weak self] in self?.onAbout?() })
         menu.addItem(item(title: "Preferences…", key: ",") { [weak self] in self?.onPreferences?() })
         menu.addItem(.separator())
-        menu.addItem(microphoneMenuItem())
+        menu.addItem(audioMenuItem())
         menu.addItem(.separator())
         menu.addItem(item(title: "Quit Vello", key: "q") { [weak self] in self?.onQuit?() })
 
@@ -157,32 +157,38 @@ final class StatusItemController: NSObject {
         return menu
     }
 
-    private func microphoneMenuItem() -> NSMenuItem {
-        let parent = NSMenuItem(title: "Microphone", action: nil, keyEquivalent: "")
+    private func audioMenuItem() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Audio", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
 
-        let off = item(title: "Off") { [weak self] in self?.settings.recordAudio = false }
-        off.state = settings.recordAudio ? .off : .on
-        submenu.addItem(off)
+        for mode in AudioCaptureMode.allCases {
+            let modeItem = item(title: mode.displayName) { [weak self] in
+                self?.settings.audioCaptureMode = mode
+            }
+            modeItem.state = settings.audioCaptureMode == mode ? .on : .off
+            submenu.addItem(modeItem)
+        }
         submenu.addItem(.separator())
 
+        let inputParent = NSMenuItem(title: "Input Device", action: nil, keyEquivalent: "")
+        let inputSubmenu = NSMenu()
         let defaultName = CaptureDevices.defaultAudioInputDevice()?.name ?? "System Default"
         let systemDefault = item(title: "System Default (\(defaultName))") { [weak self] in
-            self?.settings.recordAudio = true
             self?.settings.audioInputDeviceID = systemDefaultAudioDeviceID
         }
-        systemDefault.state = settings.recordAudio
-            && settings.audioInputDeviceID == systemDefaultAudioDeviceID ? .on : .off
-        submenu.addItem(systemDefault)
+        systemDefault.state = settings.audioInputDeviceID == systemDefaultAudioDeviceID ? .on : .off
+        inputSubmenu.addItem(systemDefault)
 
         for device in CaptureDevices.audioInputDevices() {
             let deviceItem = item(title: device.name) { [weak self] in
-                self?.settings.recordAudio = true
                 self?.settings.audioInputDeviceID = device.id
             }
-            deviceItem.state = settings.recordAudio && settings.audioInputDeviceID == device.id ? .on : .off
-            submenu.addItem(deviceItem)
+            deviceItem.state = settings.audioInputDeviceID == device.id ? .on : .off
+            inputSubmenu.addItem(deviceItem)
         }
+        inputParent.submenu = inputSubmenu
+        inputParent.isEnabled = settings.audioCaptureMode.includesMicrophone
+        submenu.addItem(inputParent)
 
         parent.submenu = submenu
         return parent
