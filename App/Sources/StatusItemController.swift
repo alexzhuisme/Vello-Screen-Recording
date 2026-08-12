@@ -62,7 +62,7 @@ final class StatusItemController: NSObject {
 
     private static func symbol(_ name: String, accessibility: String) -> NSImage? {
         let image = NSImage(systemSymbolName: name, accessibilityDescription: accessibility)
-        image?.isTemplate = false
+        image?.isTemplate = true
         return image
     }
 

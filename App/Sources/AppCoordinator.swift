@@ -261,21 +261,15 @@ final class AppCoordinator {
         Open System Settings › Privacy & Security › Screen & System Audio Recording \
         and turn on Vello.
 
-        If it is already on, quit Vello completely and open it again. Rebuilds from \
-        Xcode create a new signing identity, so each new Debug build may need its own \
-        toggle (or a freshly signed run).
+        Vello will quit so macOS can apply the change. When you are done, open Vello again.
         """
         alert.addButton(withTitle: "Open Settings & Quit")
-        alert.addButton(withTitle: "Quit Vello")
-        alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
 
         NSApp.activate()
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             Permissions.openScreenRecordingSettings()
-            NSApp.terminate(nil)
-        } else if response == .alertSecondButtonReturn {
             NSApp.terminate(nil)
         }
         return false

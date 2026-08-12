@@ -11,6 +11,10 @@ xcuserdata/
 # OS
 .DS_Store
 
+# Generated release assets and tooling
+AppStoreScreenshots/
+scripts/
+
 # Local leftovers from the old Electron tree
 node_modules/
 dist/
