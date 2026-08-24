@@ -8,10 +8,20 @@ import VelloCore
 /// Bridges `SCStream`'s non-isolated callbacks into the queue-confined writer.
 private final class StreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
     private let writer: SampleWriter
+    private let webcamCapture: WebcamCapture?
+    private let webcamCompositor: WebcamCompositor?
     private let onStop: @Sendable (Error) -> Void
+    private var didReportWriterFailure = false
 
-    init(writer: SampleWriter, onStop: @escaping @Sendable (Error) -> Void) {
+    init(
+        writer: SampleWriter,
+        webcamCapture: WebcamCapture?,
+        webcamCompositor: WebcamCompositor?,
+        onStop: @escaping @Sendable (Error) -> Void
+    ) {
         self.writer = writer
+        self.webcamCapture = webcamCapture
+        self.webcamCompositor = webcamCompositor
         self.onStop = onStop
     }
 
@@ -21,12 +31,29 @@ private final class StreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDeleg
         of type: SCStreamOutputType
     ) {
         guard CMSampleBufferDataIsReady(sampleBuffer) else { return }
+        if !didReportWriterFailure, let error = writer.failureIfAny() {
+            didReportWriterFailure = true
+            onStop(error)
+            return
+        }
 
         switch type {
         case .screen:
-            // Idle frames repeat the previous image and carry no new content.
-            guard Self.isCompleteFrame(sampleBuffer) else { return }
-            writer.appendVideo(sampleBuffer)
+            // Idle buffers have no new image, but their timestamp keeps a static
+            // recording (and a pause on a static screen) at the correct length.
+            writer.observeVideoTime(sampleBuffer)
+            // Normally idle frames can be skipped. With a webcam active, they
+            // still provide the repeated desktop image needed to encode live
+            // camera motion over an otherwise static screen.
+            guard Self.isUsableFrame(sampleBuffer, includesWebcam: webcamCapture != nil) else { return }
+            if let webcamCapture,
+               let webcamCompositor,
+               let webcamBuffer = webcamCapture.currentPixelBuffer(),
+               let composed = webcamCompositor.composite(screen: sampleBuffer, webcam: webcamBuffer) {
+                writer.appendVideo(composed)
+            } else {
+                writer.appendVideo(sampleBuffer)
+            }
         case .audio:
             writer.appendSystemAudio(sampleBuffer)
         case .microphone:
@@ -40,7 +67,7 @@ private final class StreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDeleg
         onStop(error)
     }
 
-    private static func isCompleteFrame(_ sampleBuffer: CMSampleBuffer) -> Bool {
+    private static func isUsableFrame(_ sampleBuffer: CMSampleBuffer, includesWebcam: Bool) -> Bool {
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(
             sampleBuffer,
             createIfNecessary: false
@@ -49,7 +76,7 @@ private final class StreamOutputAdapter: NSObject, SCStreamOutput, SCStreamDeleg
             let status = SCFrameStatus(rawValue: raw)
         else { return false }
 
-        return status == .complete
+        return status == .complete || (includesWebcam && status == .idle)
     }
 }
 
@@ -67,10 +94,14 @@ public final class ScreenRecorder {
     @ObservationIgnored private var writer: SampleWriter?
     @ObservationIgnored private var adapter: StreamOutputAdapter?
     @ObservationIgnored private var configuration: RecordingConfiguration?
+    @ObservationIgnored private var webcamCapture: WebcamCapture?
 
     public init() {}
 
     public var elapsed: TimeInterval { timeline.elapsed() }
+
+    /// The active camera session used by the app's excluded on-screen preview.
+    public var webcamPreviewSession: AVCaptureSession? { webcamCapture?.session }
 
     // MARK: - Lifecycle
 
@@ -101,15 +132,38 @@ public final class ScreenRecorder {
             )
 
             let outputURL = TemporaryFiles.newRecordingURL()
+            let microphoneFormatDescription = configuration.recordsMicrophone
+                ? CaptureDevices.microphoneFormatDescription(for: configuration.audioDeviceID)
+                : nil
             let writer = try SampleWriter(
                 url: outputURL,
                 pixelSize: resolved.pixelSize,
                 frameRate: configuration.frameRate,
                 includesSystemAudio: configuration.recordsSystemAudio,
-                includesMicrophone: configuration.recordsMicrophone
+                includesMicrophone: configuration.recordsMicrophone,
+                microphoneFormatDescription: microphoneFormatDescription
             )
 
-            let adapter = StreamOutputAdapter(writer: writer) { [weak self] error in
+            let webcamCapture: WebcamCapture?
+            let webcamCompositor: WebcamCompositor?
+            if let webcam = configuration.webcam {
+                guard Permissions.cameraStatus == .granted else {
+                    throw RecordingError.cameraPermissionDenied
+                }
+                let capture = try WebcamCapture(deviceID: webcam.deviceID)
+                capture.start()
+                webcamCapture = capture
+                webcamCompositor = WebcamCompositor(configuration: webcam, canvasSize: resolved.pixelSize)
+            } else {
+                webcamCapture = nil
+                webcamCompositor = nil
+            }
+
+            let adapter = StreamOutputAdapter(
+                writer: writer,
+                webcamCapture: webcamCapture,
+                webcamCompositor: webcamCompositor
+            ) { [weak self] error in
                 Task { @MainActor [weak self] in
                     self?.handleUnexpectedStop(error)
                 }
@@ -122,6 +176,14 @@ public final class ScreenRecorder {
             )
 
             let stream = SCStream(filter: resolved.filter, configuration: streamConfiguration, delegate: adapter)
+            // Retain every partially constructed resource before starting so
+            // the shared teardown path can clean up any later setup failure.
+            self.stream = stream
+            self.writer = writer
+            self.adapter = adapter
+            self.configuration = configuration
+            self.webcamCapture = webcamCapture
+
             try stream.addStreamOutput(adapter, type: .screen, sampleHandlerQueue: writer.queue)
             if configuration.recordsSystemAudio {
                 try stream.addStreamOutput(adapter, type: .audio, sampleHandlerQueue: writer.queue)
@@ -132,10 +194,6 @@ public final class ScreenRecorder {
 
             try await stream.startCapture()
 
-            self.stream = stream
-            self.writer = writer
-            self.adapter = adapter
-            self.configuration = configuration
             timeline.start()
             state = .recording
 
@@ -177,6 +235,8 @@ public final class ScreenRecorder {
         self.stream = nil
 
         defer {
+            webcamCapture?.stop()
+            webcamCapture = nil
             self.writer = nil
             adapter = nil
             self.configuration = nil
@@ -271,17 +331,20 @@ public final class ScreenRecorder {
             try? await stream.stopCapture()
         }
         writer?.cancel()
+        webcamCapture?.stop()
         stream = nil
         writer = nil
         adapter = nil
         configuration = nil
+        webcamCapture = nil
         timeline.reset()
     }
 
     private func handleUnexpectedStop(_ error: Error) {
         guard state.isActive || state == .starting else { return }
         Log.capture.error("Capture stopped unexpectedly: \(error.localizedDescription, privacy: .public)")
-        let reported = RecordingError.streamFailed(error.localizedDescription)
+        let reported = (error as? RecordingError)
+            ?? RecordingError.streamFailed(error.localizedDescription)
         Task { @MainActor in
             await teardown()
             state = .idle

@@ -9,6 +9,7 @@ final class AppCoordinator {
     private let settings = Settings.shared
     private let recorder = ScreenRecorder()
     private let clickHighlighter = ClickHighlighter()
+    private let webcamOverlay = WebcamOverlayController()
     private let cropperModel: CropperModel
     private let cropperController: CropperWindowController
     private let statusItemController: StatusItemController
@@ -31,6 +32,13 @@ final class AppCoordinator {
         wireCropper()
         wireRecorder()
         refreshHotKey()
+
+        Task {
+            // Allow the menu bar item and app activation to finish before
+            // presenting the first modal setup alert.
+            await Task.yield()
+            await requestInitialPermissionsIfNeeded()
+        }
     }
 
     // MARK: - Wiring
@@ -60,6 +68,7 @@ final class AppCoordinator {
         recorder.onUnexpectedStop = { [weak self] error in
             guard let self else { return }
             clickHighlighter.stop()
+            webcamOverlay.stop()
             cropperController.setRecording(false)
             cropperController.close()
             statusItemController.apply(state: .idle)
@@ -114,6 +123,17 @@ final class AppCoordinator {
 
     private func startRecording(_ target: CaptureTarget) {
         Task {
+            cropperModel.stopMicrophoneMonitoring()
+
+            let webcam: WebcamConfiguration?
+            do {
+                webcam = try await resolveWebcam()
+            } catch {
+                present(error)
+                cropperModel.refreshMicrophoneMonitoring()
+                return
+            }
+
             let audioDeviceID = await resolveMicrophone()
             let audioMode = resolvedAudioMode(microphoneDeviceID: audioDeviceID)
 
@@ -140,15 +160,26 @@ final class AppCoordinator {
                 frameRate: settings.recordingFrameRate,
                 showsCursor: settings.showsCursor || (!isWindowTarget && settings.highlightClicks),
                 audioMode: audioMode,
-                audioDeviceID: audioDeviceID
+                audioDeviceID: audioDeviceID,
+                webcam: webcam
             )
 
             do {
                 try await recorder.start(configuration, includedWindowIDs: includedWindowIDs)
+                if let webcam, let session = recorder.webcamPreviewSession {
+                    webcamOverlay.show(
+                        session: session,
+                        target: target,
+                        position: webcam.position,
+                        customPosition: webcam.customPosition,
+                        size: webcam.size
+                    )
+                }
                 cropperController.setRecording(true, hidesOverlay: isWindowTarget)
                 statusItemController.apply(state: .recording)
             } catch {
                 clickHighlighter.stop()
+                webcamOverlay.stop()
                 cropperController.setRecording(false)
                 cropperController.close()
                 statusItemController.apply(state: .idle)
@@ -163,6 +194,7 @@ final class AppCoordinator {
         Task {
             defer {
                 clickHighlighter.stop()
+                webcamOverlay.stop()
                 cropperController.setRecording(false)
                 cropperController.close()
                 statusItemController.apply(state: .idle)
@@ -198,6 +230,7 @@ final class AppCoordinator {
     func stopRecordingForTermination() async {
         guard recorder.state.isActive else { return }
         clickHighlighter.stop()
+        webcamOverlay.stop()
         await recorder.cancel()
         cropperController.setRecording(false)
         cropperController.close()
@@ -245,35 +278,46 @@ final class AppCoordinator {
 
     // MARK: - Permissions
 
+    private func requestInitialPermissionsIfNeeded() async {
+        guard !settings.didShowInitialPermissionSetup else { return }
+
+        // Keep the controller strongly alive for the entire nested modal loop;
+        // its SwiftUI button callbacks intentionally capture it weakly.
+        let permissionSetupController = PermissionSetupWindowController()
+        let shouldContinue = permissionSetupController.runModal()
+        // Remember either choice. Feature-level permission checks remain in
+        // place, so choosing Not Now safely defers the system prompts.
+        settings.didShowInitialPermissionSetup = true
+        guard shouldContinue else { return }
+
+        // Request Screen Recording last because macOS may need Vello to quit
+        // before the newly granted permission becomes effective.
+        if Permissions.microphoneStatus == .notDetermined {
+            _ = await Permissions.requestMicrophoneAccess()
+        }
+        if Permissions.cameraStatus == .notDetermined {
+            _ = await Permissions.requestCameraAccess()
+        }
+        await requestInitialScreenRecordingAccess()
+    }
+
+    private func requestInitialScreenRecordingAccess() async {
+        guard !(await Permissions.verifyScreenRecordingAccess()) else { return }
+        // macOS presents the authoritative permission dialog. Do not stack a
+        // second Vello alert on top of it; the user can grant or deny access in
+        // the system UI and retry recording afterward.
+        _ = Permissions.requestScreenRecordingAccess()
+    }
+
     private func ensureScreenRecordingPermission() async -> Bool {
         // Prefer ScreenCaptureKit over CGPreflight — Debug builds often leave
         // CGPreflight false even when the System Settings toggle is On.
         if await Permissions.verifyScreenRecordingAccess() { return true }
 
-        // Surfaces the system prompt the first time; later calls only report.
+        // CGRequestScreenCaptureAccess owns the prompt. It returns while the
+        // system dialog is still visible, so presenting another app alert here
+        // would create two overlapping permission dialogs.
         _ = Permissions.requestScreenRecordingAccess()
-        if await Permissions.verifyScreenRecordingAccess() { return true }
-
-        let alert = NSAlert()
-        alert.messageText = "Vello needs permission to record your screen"
-        // macOS binds Screen Recording permission to this process's code signature.
-        // Enabling the toggle is not enough while the current process is still running —
-        // TCC only takes effect after a full quit and relaunch.
-        alert.informativeText = """
-        Open System Settings › Privacy & Security › Screen & System Audio Recording \
-        and turn on Vello.
-
-        Vello will quit so macOS can apply the change. When you are done, open Vello again.
-        """
-        alert.addButton(withTitle: "Open Settings & Quit")
-        alert.alertStyle = .warning
-
-        NSApp.activate()
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            Permissions.openScreenRecordingSettings()
-            NSApp.terminate(nil)
-        }
         return false
     }
 
@@ -299,6 +343,27 @@ final class AppCoordinator {
             return settings.audioCaptureMode
         }
         return settings.audioCaptureMode.includesSystemAudio ? .systemAudio : .off
+    }
+
+    private func resolveWebcam() async throws -> WebcamConfiguration? {
+        guard settings.webcamEnabled else { return nil }
+
+        if Permissions.cameraStatus == .notDetermined {
+            _ = await Permissions.requestCameraAccess()
+        }
+        guard Permissions.cameraStatus == .granted else {
+            throw RecordingError.cameraPermissionDenied
+        }
+        guard let deviceID = CaptureDevices.resolveVideoDeviceID(settings.webcamDeviceID) else {
+            throw RecordingError.cameraUnavailable
+        }
+        settings.webcamDeviceID = deviceID
+        return WebcamConfiguration(
+            deviceID: deviceID,
+            position: settings.webcamPosition,
+            customPosition: settings.webcamCustomPosition,
+            size: settings.webcamSize
+        )
     }
 
     // MARK: - Errors

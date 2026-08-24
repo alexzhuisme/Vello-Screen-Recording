@@ -56,6 +56,21 @@ public enum Permissions {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
 
+    // MARK: - Camera
+
+    public static var cameraStatus: PermissionStatus {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: .granted
+        case .notDetermined: .notDetermined
+        case .denied, .restricted: .denied
+        @unknown default: .denied
+        }
+    }
+
+    public static func requestCameraAccess() async -> Bool {
+        await AVCaptureDevice.requestAccess(for: .video)
+    }
+
     // MARK: - Settings deep links
 
     public static func openScreenRecordingSettings() {
@@ -64,6 +79,10 @@ public enum Permissions {
 
     public static func openMicrophoneSettings() {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+    }
+
+    public static func openCameraSettings() {
+        open("x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")
     }
 
     private static func open(_ urlString: String) {

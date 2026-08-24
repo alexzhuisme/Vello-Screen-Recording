@@ -100,7 +100,7 @@ struct CropperActionBar: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(!model.hasSelection)
+        .disabled(!model.hasSelection || model.isCountingDown)
         .help("Start recording")
     }
 
@@ -109,6 +109,10 @@ struct CropperActionBar: View {
     private var trailingControls: some View {
         HStack(spacing: 6) {
             audioMenu
+            if settings.audioCaptureMode.includesMicrophone {
+                microphoneLevelIndicator
+            }
+            webcamMenu
             cursorMenu
             optionsMenu
         }
@@ -119,6 +123,7 @@ struct CropperActionBar: View {
             ForEach(AudioCaptureMode.allCases) { mode in
                 Button {
                     settings.audioCaptureMode = mode
+                    model.refreshMicrophoneMonitoring()
                 } label: {
                     if settings.audioCaptureMode == mode {
                         Label(mode.displayName, systemImage: "checkmark")
@@ -133,6 +138,7 @@ struct CropperActionBar: View {
             Menu("Input Device") {
                 Button {
                     settings.audioInputDeviceID = systemDefaultAudioDeviceID
+                    model.refreshMicrophoneMonitoring()
                 } label: {
                     if isSelectedMicrophone(systemDefaultAudioDeviceID) {
                         Label("System Default", systemImage: "checkmark")
@@ -144,6 +150,7 @@ struct CropperActionBar: View {
                 ForEach(model.audioInputDevices) { device in
                     Button {
                         settings.audioInputDeviceID = device.id
+                        model.refreshMicrophoneMonitoring()
                     } label: {
                         if isSelectedMicrophone(device.id) {
                             Label(device.name, systemImage: "checkmark")
@@ -176,6 +183,114 @@ struct CropperActionBar: View {
         case .microphone: "mic.fill"
         case .systemAudioAndMicrophone: "waveform.badge.mic"
         }
+    }
+
+    private var microphoneLevelIndicator: some View {
+        HStack(alignment: .bottom, spacing: 2) {
+            if model.microphoneMonitor.status == .monitoring,
+               !model.microphoneMonitor.isSilent {
+                ForEach(0..<4, id: \.self) { index in
+                    Capsule()
+                        .fill(meterColor(for: index))
+                        .frame(width: 3, height: CGFloat(5 + index * 3))
+                }
+            } else {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+            }
+        }
+        .frame(width: 18, height: 17)
+        .help(microphoneMonitorHelp)
+        .accessibilityLabel(microphoneMonitorHelp)
+    }
+
+    private func meterColor(for index: Int) -> Color {
+        let threshold = Double(index + 1) / 4
+        guard model.microphoneMonitor.level >= threshold else {
+            return Color.secondary.opacity(0.25)
+        }
+        return index == 3 ? .orange : .green
+    }
+
+    private var microphoneMonitorHelp: String {
+        switch model.microphoneMonitor.status {
+        case .inactive:
+            "Microphone meter is off"
+        case .permissionDenied:
+            "Microphone permission is denied"
+        case .unavailable:
+            "The selected microphone is unavailable"
+        case .monitoring where model.microphoneMonitor.isSilent:
+            "No microphone input detected"
+        case .monitoring:
+            "Microphone input level"
+        }
+    }
+
+    private var webcamMenu: some View {
+        Menu {
+            Button {
+                settings.webcamEnabled.toggle()
+                if settings.webcamEnabled, settings.webcamDeviceID == nil {
+                    settings.webcamDeviceID = CaptureDevices.defaultVideoInputDevice()?.id
+                }
+            } label: {
+                if settings.webcamEnabled {
+                    Label("Include Webcam", systemImage: "checkmark")
+                } else {
+                    Text("Include Webcam")
+                }
+            }
+
+            Divider()
+
+            Menu("Camera") {
+                ForEach(model.videoInputDevices) { device in
+                    Button {
+                        settings.webcamDeviceID = device.id
+                        settings.webcamEnabled = true
+                    } label: {
+                        if settings.webcamDeviceID == device.id {
+                            Label(device.name, systemImage: "checkmark")
+                        } else {
+                            Text(device.name)
+                        }
+                    }
+                }
+            }
+            .disabled(model.videoInputDevices.isEmpty)
+
+            Picker("Position", selection: Binding(
+                get: { settings.webcamPosition },
+                set: { settings.webcamPosition = $0 }
+            )) {
+                ForEach(WebcamPosition.allCases) { position in
+                    Text(position.displayName).tag(position)
+                }
+            }
+
+            Picker("Size", selection: Binding(
+                get: { settings.webcamSize },
+                set: { settings.webcamSize = $0 }
+            )) {
+                ForEach(WebcamSize.allCases) { size in
+                    Text(size.displayName).tag(size)
+                }
+            }
+        } label: {
+            Image(systemName: settings.webcamEnabled ? "video.fill" : "video.slash")
+                .font(.system(size: 14))
+                .foregroundStyle(settings.webcamEnabled ? Color.accentColor : .secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(
+            settings.webcamEnabled
+                ? "Webcam enabled — drag the bubble in the capture area to reposition it"
+                : "Webcam bubble disabled"
+        )
     }
 
     private var cursorMenu: some View {
@@ -236,6 +351,14 @@ struct CropperActionBar: View {
             )) {
                 Text("30 fps").tag(30)
                 Text("60 fps").tag(60)
+            }
+            Picker("Countdown", selection: Binding(
+                get: { settings.recordingCountdown },
+                set: { settings.recordingCountdown = $0 }
+            )) {
+                ForEach(RecordingCountdown.allCases) { countdown in
+                    Text(countdown.displayName).tag(countdown)
+                }
             }
             Divider()
             Button("Preferences…") { model.onOpenPreferences?() }

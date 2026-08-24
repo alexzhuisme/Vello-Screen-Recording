@@ -12,6 +12,8 @@ struct CropperOverlayView: View {
     @Bindable var model: CropperModel
 
     @State private var rectAtGestureStart: CGRect?
+    @State private var webcamCenterAtGestureStart: CGPoint?
+    @State private var isWebcamHovered = false
 
     private var isActive: Bool { model.activeDisplayID == display.id }
     private var bounds: CGRect { model.bounds(for: display) }
@@ -29,12 +31,12 @@ struct CropperOverlayView: View {
     }
 
     private var showsWindowActionBar: Bool {
-        isWindowMode && model.selectedWindow != nil && !model.isRecording
+        isWindowMode && model.selectedWindow != nil && !model.isRecording && !model.isCountingDown
             && model.selectedWindow.map { $0.frame.intersects(display.frame) } == true
     }
 
     private var showsModeHint: Bool {
-        guard isActive, !model.isRecording else { return false }
+        guard isActive, !model.isRecording, !model.isCountingDown else { return false }
         // Region always starts with a default rect, so don't gate on hasSelection.
         if isWindowMode, model.selectedWindow != nil { return false }
         return true
@@ -46,18 +48,28 @@ struct CropperOverlayView: View {
 
             if showsRegionSelection {
                 selectionBorder(frame: selection, recording: model.isRecording)
-                if !model.isRecording {
+                if model.isCountingDown {
+                    countdownOverlay(anchoredTo: selection)
+                } else if !model.isRecording {
                     moveSurface
                     handles
                     actionBar(anchoredTo: selection)
+                    if model.settings.webcamEnabled {
+                        webcamPlacementBubble(in: selection)
+                    }
                 }
             }
 
             if let highlight = windowHighlight {
                 windowHighlightFill(highlight)
                 selectionBorder(frame: highlight, recording: false)
-                if showsWindowActionBar {
+                if model.isCountingDown, isActive {
+                    countdownOverlay(anchoredTo: highlight)
+                } else if showsWindowActionBar {
                     actionBar(anchoredTo: highlight)
+                    if model.settings.webcamEnabled {
+                        webcamPlacementBubble(in: highlight)
+                    }
                 } else if let summary = model.highlightedWindowSummary {
                     hoverLabel(summary, anchoredTo: highlight)
                 }
@@ -87,9 +99,9 @@ struct CropperOverlayView: View {
             dimmingMask
                 .allowsHitTesting(false)
 
-            if isRegionMode, !model.isRecording {
+            if isRegionMode, !model.isRecording, !model.isCountingDown {
                 hitCatcher.gesture(createSelectionGesture)
-            } else if isWindowMode, !model.isRecording {
+            } else if isWindowMode, !model.isRecording, !model.isCountingDown {
                 hitCatcher
                     .onTapGesture {
                         if model.selectedWindow != nil {
@@ -157,6 +169,73 @@ struct CropperOverlayView: View {
             .allowsHitTesting(false)
     }
 
+    /// Direct manipulation is the primary placement control. The menu remains
+    /// available as an accessible, deterministic alternative for the four corners.
+    private func webcamPlacementBubble(in captureFrame: CGRect) -> some View {
+        let localFrame = model.settings.webcamSize.previewFrame(
+            in: captureFrame.size,
+            position: model.settings.webcamPosition,
+            customPosition: model.settings.webcamCustomPosition
+        )
+        let diameter = localFrame.width
+
+        return ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.36, green: 0.39, blue: 0.96),
+                            Color(red: 0.16, green: 0.68, blue: 0.86)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Image(systemName: "video.fill")
+                .font(.system(size: max(14, diameter * 0.22), weight: .semibold))
+                .foregroundStyle(.white)
+
+            if diameter >= 58 {
+                Image(systemName: "arrow.up.and.down.and.arrow.left.and.right")
+                    .font(.system(size: max(8, diameter * 0.09), weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: max(20, diameter * 0.22), height: max(20, diameter * 0.22))
+                    .background(Color.black.opacity(0.58), in: Circle())
+                    .offset(x: diameter * 0.31, y: diameter * 0.31)
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .overlay {
+            Circle().strokeBorder(.white.opacity(0.92), lineWidth: 3)
+        }
+        .shadow(color: .black.opacity(0.32), radius: 12, y: 6)
+        .scaleEffect(isWebcamHovered ? 1.025 : 1)
+        .offset(
+            x: captureFrame.minX + localFrame.minX,
+            y: captureFrame.minY + localFrame.minY
+        )
+        .contentShape(Circle())
+        // The capture region has its own full-surface drag gesture underneath.
+        // Give direct camera placement precedence so that gesture cannot steal
+        // the mouse-down (which made the bubble appear stuck on full-screen crops).
+        .highPriorityGesture(webcamPlacementGesture(in: captureFrame), including: .all)
+        .zIndex(10)
+        .onHover { inside in
+            isWebcamHovered = inside
+            if inside {
+                NSCursor.openHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .animation(.snappy(duration: 0.18), value: model.settings.webcamPosition)
+        .animation(.easeOut(duration: 0.12), value: isWebcamHovered)
+        .help("Drag to position the webcam bubble. It snaps to the four corners.")
+        .accessibilityLabel("Webcam bubble position")
+        .accessibilityHint("Drag to move, or choose a position from the Webcam menu")
+    }
+
     private func borderColor(recording: Bool) -> Color {
         guard recording else { return .white.opacity(0.95) }
         return model.isPaused ? .orange.opacity(0.9) : .red.opacity(0.9)
@@ -192,6 +271,37 @@ struct CropperOverlayView: View {
         CropperActionBar(model: model)
             .frame(width: VelloMetrics.actionBarSize.width, height: VelloMetrics.actionBarSize.height)
             .offset(x: actionBarOrigin(for: frame).x, y: actionBarOrigin(for: frame).y)
+    }
+
+    private func countdownOverlay(anchoredTo frame: CGRect) -> some View {
+        let shortestSide = min(frame.width, frame.height)
+        let badgeSize = min(112, max(22, shortestSide * 0.72))
+
+        return VStack(spacing: 7) {
+            if let remaining = model.countdownRemaining {
+                Text("\(remaining)")
+                    .font(.system(size: badgeSize * 0.56, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .contentTransition(.numericText(countsDown: true))
+                    .frame(width: badgeSize, height: badgeSize)
+                    .background(Color.black.opacity(0.78), in: Circle())
+                    .overlay(Circle().strokeBorder(Color.white.opacity(0.22), lineWidth: 1))
+                    .shadow(color: .black.opacity(0.4), radius: 14, y: 4)
+            }
+
+            if shortestSide >= 160 {
+                Text("Esc to cancel")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color.black.opacity(0.68), in: Capsule())
+            }
+        }
+        .frame(width: frame.width, height: frame.height)
+        .offset(x: frame.minX, y: frame.minY)
+        .animation(.snappy(duration: 0.22), value: model.countdownRemaining)
+        .allowsHitTesting(false)
     }
 
     /// Shown while hovering a window (before click) so the user knows which app is targeted.
@@ -284,6 +394,43 @@ struct CropperOverlayView: View {
             .onEnded { _ in
                 rectAtGestureStart = nil
                 model.commitSelection()
+            }
+    }
+
+    private func webcamPlacementGesture(in captureFrame: CGRect) -> some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                let settings = model.settings
+                let localFrame = settings.webcamSize.previewFrame(
+                    in: captureFrame.size,
+                    position: settings.webcamPosition,
+                    customPosition: settings.webcamCustomPosition
+                )
+                let currentCenter = CGPoint(
+                    x: captureFrame.minX + localFrame.midX,
+                    y: captureFrame.minY + localFrame.midY
+                )
+                let start = webcamCenterAtGestureStart ?? currentCenter
+                webcamCenterAtGestureStart = start
+                model.updateWebcamPlacement(
+                    to: CGPoint(
+                        x: start.x + value.translation.width,
+                        y: start.y + value.translation.height
+                    ),
+                    in: captureFrame
+                )
+            }
+            .onEnded { value in
+                if let start = webcamCenterAtGestureStart {
+                    model.updateWebcamPlacement(
+                        to: CGPoint(
+                            x: start.x + value.translation.width,
+                            y: start.y + value.translation.height
+                        ),
+                        in: captureFrame
+                    )
+                }
+                webcamCenterAtGestureStart = nil
             }
     }
 

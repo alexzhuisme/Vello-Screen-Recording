@@ -190,6 +190,60 @@ final class EditorModel: Identifiable {
         if currentTime > trimEnd { seek(to: trimEnd) }
     }
 
+    func seekBy(_ delta: TimeInterval) {
+        seek(to: currentTime + delta)
+    }
+
+    func setTrimStartAtPlayhead() {
+        setTrimStart(currentTime)
+    }
+
+    func setTrimEndAtPlayhead() {
+        setTrimEnd(currentTime)
+    }
+
+    // MARK: - Presets
+
+    func apply(_ preset: ExportPreset) {
+        format = preset.format
+        scalePercent = preset.scalePercent
+        frameRate = preset.frameRate
+        isMuted = preset.isMuted && supportsAudio
+        player.isMuted = isMuted
+    }
+
+    func saveCurrentPreset(named rawName: String) {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+
+        let preset = ExportPreset(
+            name: name,
+            format: format,
+            scalePercent: scalePercent,
+            frameRate: frameRate,
+            isMuted: isMuted
+        )
+        if let index = settings.exportPresets.firstIndex(where: {
+            $0.name.compare(name, options: .caseInsensitive) == .orderedSame
+        }) {
+            let replacement = ExportPreset(
+                id: settings.exportPresets[index].id,
+                name: name,
+                format: format,
+                scalePercent: scalePercent,
+                frameRate: frameRate,
+                isMuted: isMuted
+            )
+            settings.exportPresets[index] = replacement
+        } else {
+            settings.exportPresets.append(preset)
+        }
+    }
+
+    func deletePreset(_ preset: ExportPreset) {
+        settings.exportPresets.removeAll { $0.id == preset.id }
+    }
+
     // MARK: - Export
 
     func export() {

@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import CoreMedia
 import CoreGraphics
 import ScreenCaptureKit
 import VelloCore
@@ -64,6 +65,16 @@ public struct CaptureWindow: Sendable, Identifiable, Equatable {
 public struct AudioInputDevice: Sendable, Identifiable, Equatable {
     public let id: String
     public let name: String
+}
+
+public struct VideoInputDevice: Sendable, Identifiable, Equatable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
 }
 
 public enum CaptureDevices {
@@ -211,6 +222,37 @@ public enum CaptureDevices {
             return stored
         }
         return defaultAudioInputDevice()?.id
+    }
+
+    /// ScreenCaptureKit delivers microphone samples in the selected device's
+    /// native format. Pass that format to AVAssetWriter so mono and external
+    /// microphones are encoded with compatible channel and sample-rate settings.
+    static func microphoneFormatDescription(for deviceID: String?) -> CMFormatDescription? {
+        guard let deviceID, let device = AVCaptureDevice(uniqueID: deviceID) else { return nil }
+        return device.activeFormat.formatDescription
+    }
+
+    public static func videoInputDevices() -> [VideoInputDevice] {
+        let session = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .external],
+            mediaType: .video,
+            position: .unspecified
+        )
+        return session.devices.map { VideoInputDevice(id: $0.uniqueID, name: $0.localizedName) }
+    }
+
+    public static func defaultVideoInputDevice() -> VideoInputDevice? {
+        guard let device = AVCaptureDevice.default(for: .video) else { return nil }
+        return VideoInputDevice(id: device.uniqueID, name: device.localizedName)
+    }
+
+    /// Resolves a remembered camera, falling back to the current system default.
+    public static func resolveVideoDeviceID(_ stored: String?) -> String? {
+        let available = videoInputDevices()
+        if let stored, available.contains(where: { $0.id == stored }) {
+            return stored
+        }
+        return defaultVideoInputDevice()?.id
     }
 }
 

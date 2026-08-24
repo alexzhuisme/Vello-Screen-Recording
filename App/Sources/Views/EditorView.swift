@@ -6,6 +6,8 @@ import VelloUI
 
 struct EditorView: View {
     @Bindable var model: EditorModel
+    @State private var showsPresetNamePrompt = false
+    @State private var presetName = ""
 
     var body: some View {
         ZStack {
@@ -29,6 +31,14 @@ struct EditorView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .animation(.easeInOut(duration: 0.15), value: model.exportJob == nil)
         .task { await model.load() }
+        .alert("Save Export Preset", isPresented: $showsPresetNamePrompt) {
+            TextField("Preset name", text: $presetName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { model.saveCurrentPreset(named: presetName) }
+                .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("Save the current format, scale, frame rate, and mute setting.")
+        }
     }
 
     // MARK: - Video
@@ -67,7 +77,7 @@ struct EditorView: View {
             }
             .buttonStyle(.plain)
             .disabled(!model.isLoaded)
-            .help(model.isPlaying ? "Pause" : "Play")
+            .help(model.isPlaying ? "Pause (Space)" : "Play (Space)")
 
             Text(formatDuration(model.currentTime))
                 .font(.caption.monospacedDigit())
@@ -75,6 +85,7 @@ struct EditorView: View {
                 .frame(width: 42, alignment: .leading)
 
             TrimBar(model: model)
+                .help("Drag to trim or scrub. I sets the start; O sets the end; arrows seek.")
 
             Text(formatDuration(model.trimmedDuration))
                 .font(.caption.monospacedDigit())
@@ -98,6 +109,8 @@ struct EditorView: View {
 
     private var optionsBar: some View {
         HStack(spacing: 10) {
+            presetsMenu
+
             Picker("", selection: $model.scalePercent) {
                 ForEach(EditorModel.scaleOptions, id: \.self) { percent in
                     Text("\(percent)%").tag(percent)
@@ -146,10 +159,52 @@ struct EditorView: View {
         .padding(.vertical, 10)
     }
 
+    private var presetsMenu: some View {
+        Menu {
+            if model.settings.exportPresets.isEmpty {
+                Text("No Saved Presets")
+            } else {
+                ForEach(model.settings.exportPresets) { preset in
+                    Button {
+                        model.apply(preset)
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Text(preset.name)
+                            Text(preset.summary)
+                        }
+                    }
+                }
+                Divider()
+            }
+
+            Button("Save Current Settings…") {
+                presetName = ""
+                showsPresetNamePrompt = true
+            }
+
+            if !model.settings.exportPresets.isEmpty {
+                Menu("Delete Preset") {
+                    ForEach(model.settings.exportPresets) { preset in
+                        Button(preset.name, role: .destructive) {
+                            model.deletePreset(preset)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Export presets")
+    }
+
     private var saveLocationMenu: some View {
         Menu {
+            Button("Use Downloads") { SaveDestination.useDownloadsFolder(settings: model.settings) }
             Button("Choose Folder…") { SaveDestination.chooseFolder(settings: model.settings) }
-            Button("Ask Every Time") { SaveDestination.forgetFolder(settings: model.settings) }
+            Button("Ask Every Time") { SaveDestination.askEveryTime(settings: model.settings) }
         } label: {
             Label(model.settings.saveDirectoryDisplayName, systemImage: "folder")
                 .lineLimit(1)

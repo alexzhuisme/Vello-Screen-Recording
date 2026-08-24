@@ -29,15 +29,21 @@ final class CropperModel {
 
     var isRecording = false
     var isPaused = false
+    private(set) var countdownRemaining: Int?
 
     var audioInputDevices: [AudioInputDevice] = []
     var microphoneAvailable = false
+    var videoInputDevices: [VideoInputDevice] = []
+    let microphoneMonitor = MicrophoneLevelMonitor()
 
     @ObservationIgnored let settings: Settings
 
     @ObservationIgnored var onStartRecording: ((CaptureTarget) -> Void)?
     @ObservationIgnored var onCancel: (() -> Void)?
     @ObservationIgnored var onOpenPreferences: (() -> Void)?
+
+    @ObservationIgnored private var countdownTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingCaptureTarget: CaptureTarget?
 
     init(settings: Settings) {
         self.settings = settings
@@ -46,6 +52,8 @@ final class CropperModel {
     var activeDisplay: CaptureDisplay? {
         displays.first { $0.id == activeDisplayID }
     }
+
+    var isCountingDown: Bool { countdownRemaining != nil }
 
     var hasSelection: Bool {
         switch selectionMode {
@@ -111,6 +119,7 @@ final class CropperModel {
     }
 
     func prepare(displays: [CaptureDisplay], preferredDisplayID: CGDirectDisplayID?) {
+        cancelCountdown()
         self.displays = displays
         selectionMode = .region
         hoveredWindowID = nil
@@ -150,6 +159,36 @@ final class CropperModel {
         settings.lastSelection = selection
     }
 
+    func webcamBubbleFrame(in captureFrame: CGRect) -> CGRect {
+        let localFrame = settings.webcamSize.previewFrame(
+            in: captureFrame.size,
+            position: settings.webcamPosition,
+            customPosition: settings.webcamCustomPosition
+        )
+        return localFrame.offsetBy(dx: captureFrame.minX, dy: captureFrame.minY)
+    }
+
+    func updateWebcamPlacement(to previewCenter: CGPoint, in captureFrame: CGRect) {
+        let currentFrame = settings.webcamSize.previewFrame(
+            in: captureFrame.size,
+            position: settings.webcamPosition,
+            customPosition: settings.webcamCustomPosition
+        )
+        let placement = settings.webcamSize.placement(
+            forPreviewCenter: CGPoint(
+                x: previewCenter.x - captureFrame.minX,
+                y: previewCenter.y - captureFrame.minY
+            ),
+            in: captureFrame.size,
+            snappingThreshold: max(20, currentFrame.width * 0.16)
+        )
+
+        if placement.position == .custom {
+            settings.webcamCustomPosition = placement.customPosition
+        }
+        settings.webcamPosition = placement.position
+    }
+
     func setSelectionSize(_ size: CGSize) {
         guard selectionMode == .region, let display = activeDisplay else { return }
         let bounds = self.bounds(for: display)
@@ -172,6 +211,7 @@ final class CropperModel {
     }
 
     func toggleSelectionMode() {
+        guard !isCountingDown else { return }
         switch selectionMode {
         case .region:
             enterWindowMode()
@@ -250,18 +290,73 @@ final class CropperModel {
     }
 
     func startRecording() {
-        guard hasSelection else { return }
+        guard hasSelection, !isCountingDown else { return }
+
+        guard let target = captureTarget() else { return }
+        let ticks = settings.recordingCountdown.ticks
+        guard let firstTick = ticks.first else {
+            onStartRecording?(target)
+            return
+        }
+
+        pendingCaptureTarget = target
+        countdownRemaining = firstTick
+        countdownTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            for tick in ticks.dropFirst() {
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                self.countdownRemaining = tick
+            }
+
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, let target = self.pendingCaptureTarget else { return }
+
+            self.countdownTask = nil
+            self.pendingCaptureTarget = nil
+            self.countdownRemaining = nil
+            self.onStartRecording?(target)
+        }
+    }
+
+    func handleCancel() {
+        if isCountingDown {
+            cancelCountdown()
+        } else {
+            onCancel?()
+        }
+    }
+
+    func cancelCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        pendingCaptureTarget = nil
+        countdownRemaining = nil
+    }
+
+    private func captureTarget() -> CaptureTarget? {
+        guard hasSelection else { return nil }
 
         switch selectionMode {
         case .region:
-            guard let displayID = activeDisplayID else { return }
+            guard let displayID = activeDisplayID else { return nil }
             commitSelection()
-            onStartRecording?(
-                .display(displayID: displayID, cropRect: SelectionGeometry.evenSized(selection))
+            return .display(
+                displayID: displayID,
+                cropRect: SelectionGeometry.evenSized(selection)
             )
         case .window:
-            guard let window = selectedWindow else { return }
-            onStartRecording?(.window(windowID: window.id))
+            guard let window = selectedWindow else { return nil }
+            return .window(windowID: window.id)
         }
     }
 
@@ -291,6 +386,22 @@ final class CropperModel {
     func refreshAudioDevices() {
         audioInputDevices = CaptureDevices.audioInputDevices()
         microphoneAvailable = Permissions.microphoneStatus != .denied && !audioInputDevices.isEmpty
+    }
+
+    func refreshVideoDevices() {
+        videoInputDevices = CaptureDevices.videoInputDevices()
+    }
+
+    func refreshMicrophoneMonitoring() {
+        guard settings.audioCaptureMode.includesMicrophone else {
+            microphoneMonitor.stop()
+            return
+        }
+        Task { await microphoneMonitor.start(deviceID: settings.audioInputDeviceID) }
+    }
+
+    func stopMicrophoneMonitoring() {
+        microphoneMonitor.stop()
     }
 
     private func scaleFactor(for globalFrame: CGRect) -> CGFloat {

@@ -21,7 +21,7 @@ enum SaveDestination {
         if let folder = settings.resolveSaveDirectory() {
             return Resolution(
                 url: folder.appendingPathComponent(suggestedName),
-                accessScope: folder
+                accessScope: settings.saveDirectoryBookmark == nil ? nil : folder
             )
         }
 
@@ -65,8 +65,11 @@ enum SaveDestination {
         try? settings.rememberSaveDirectory(url)
     }
 
-    static func forgetFolder(settings: Settings) {
-        settings.saveDirectoryBookmark = nil
-        settings.saveDirectoryPath = nil
+    static func useDownloadsFolder(settings: Settings) {
+        settings.useDownloadsDirectory()
+    }
+
+    static func askEveryTime(settings: Settings) {
+        settings.askForSaveLocationEveryTime()
     }
 }

@@ -52,18 +52,23 @@ public struct RecordingConfiguration: Sendable, Equatable {
     /// include microphone capture.
     public var audioDeviceID: String?
 
+    /// Optional camera feed composited into the encoded video frame.
+    public var webcam: WebcamConfiguration?
+
     public init(
         target: CaptureTarget,
         frameRate: Int = 30,
         showsCursor: Bool = true,
         audioMode: AudioCaptureMode = .off,
-        audioDeviceID: String? = nil
+        audioDeviceID: String? = nil,
+        webcam: WebcamConfiguration? = nil
     ) {
         self.target = target
         self.frameRate = frameRate
         self.showsCursor = showsCursor
         self.audioMode = audioMode
         self.audioDeviceID = audioDeviceID
+        self.webcam = webcam
     }
 
     public var recordsSystemAudio: Bool { audioMode.includesSystemAudio }

@@ -4,6 +4,8 @@ public enum RecordingError: LocalizedError, Equatable {
     case screenRecordingPermissionDenied
     case displayUnavailable
     case windowUnavailable
+    case cameraUnavailable
+    case cameraPermissionDenied
     case alreadyRecording
     case notRecording
     case emptyRecording
@@ -18,6 +20,10 @@ public enum RecordingError: LocalizedError, Equatable {
             "The selected display is no longer available."
         case .windowUnavailable:
             "The selected window is no longer available."
+        case .cameraUnavailable:
+            "The selected camera is not available."
+        case .cameraPermissionDenied:
+            "Camera access is not available."
         case .alreadyRecording:
             "A recording is already in progress."
         case .notRecording:
@@ -37,6 +43,10 @@ public enum RecordingError: LocalizedError, Equatable {
             "Open System Settings › Privacy & Security › Screen Recording and enable Vello."
         case .emptyRecording:
             "Try recording again for a little longer."
+        case .cameraUnavailable:
+            "Connect a camera or choose another camera in Vello's recording options."
+        case .cameraPermissionDenied:
+            "Open System Settings › Privacy & Security › Camera and allow Vello."
         default:
             nil
         }

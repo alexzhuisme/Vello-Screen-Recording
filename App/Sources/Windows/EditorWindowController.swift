@@ -6,6 +6,7 @@ import VelloCore
 final class EditorWindowController: NSObject, NSWindowDelegate {
     let model: EditorModel
     private var window: NSWindow?
+    private var keyMonitor: Any?
 
     var onClose: ((EditorWindowController) -> Void)?
 
@@ -32,6 +33,7 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
 
         self.window = window
+        installKeyboardControls(for: window)
         NSApp.activate()
     }
 
@@ -40,10 +42,58 @@ final class EditorWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        removeKeyboardControls()
         model.pause()
         model.cancelExport()
         window?.delegate = nil
         window = nil
         onClose?(self)
+    }
+
+    private func installKeyboardControls(for window: NSWindow) {
+        removeKeyboardControls()
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak window] event in
+            var handled = false
+            MainActor.assumeIsolated {
+                guard let self,
+                      let window,
+                      window.isKeyWindow,
+                      self.model.exportJob == nil,
+                      !(window.firstResponder is NSTextView),
+                      !event.modifierFlags.contains(.command),
+                      !event.modifierFlags.contains(.control)
+                else { return }
+
+                switch event.keyCode {
+                case 49: // Space
+                    if !event.isARepeat {
+                        self.model.togglePlayback()
+                    }
+                    handled = true
+                case 123: // Left Arrow
+                    self.model.seekBy(event.modifierFlags.contains(.option) ? -5 : -1)
+                    handled = true
+                case 124: // Right Arrow
+                    self.model.seekBy(event.modifierFlags.contains(.option) ? 5 : 1)
+                    handled = true
+                case 34 where !event.isARepeat: // I
+                    self.model.setTrimStartAtPlayhead()
+                    handled = true
+                case 31 where !event.isARepeat: // O
+                    self.model.setTrimEndAtPlayhead()
+                    handled = true
+                default:
+                    break
+                }
+            }
+            return handled ? nil : event
+        }
+    }
+
+    private func removeKeyboardControls() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
     }
 }

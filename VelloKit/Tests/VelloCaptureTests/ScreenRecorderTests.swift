@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import AudioToolbox
 import CoreMedia
 import Foundation
 import Testing
@@ -14,6 +15,9 @@ struct ScreenRecorderTests {
     /// Evaluated by the `.enabled(if:)` traits below so the capture tests are
     /// skipped with a clear reason rather than failing on an unprepared machine.
     nonisolated static var canCapture: Bool { Permissions.hasScreenRecordingAccess }
+    nonisolated static var canCaptureCamera: Bool {
+        Permissions.cameraStatus == .granted && CaptureDevices.defaultVideoInputDevice() != nil
+    }
 
     private func makeConfiguration(
         cropRect: CGRect?,
@@ -79,20 +83,82 @@ struct ScreenRecorderTests {
         #expect(both.captureMicrophone)
     }
 
-    @Test("The capture writer accepts separate system and microphone tracks")
-    func createsDualAudioWriter() throws {
+    @Test("The capture writer remains healthy with the live dual-audio configuration")
+    func createsDualAudioWriter() async throws {
         let url = TemporaryFiles.newRecordingURL()
         defer { try? FileManager.default.removeItem(at: url) }
 
         let writer = try SampleWriter(
             url: url,
-            pixelSize: CGSize(width: 320, height: 240),
-            frameRate: 30,
+            pixelSize: CGSize(width: 1996, height: 1122),
+            frameRate: 60,
             includesSystemAudio: true,
-            includesMicrophone: true
+            includesMicrophone: true,
+            microphoneFormatDescription: try makeMonoAudioDescription()
         )
-        writer.cancel()
-        writer.queue.sync {}
+
+        // Some AVAssetWriter configuration errors are reported asynchronously
+        // shortly after startWriting(), rather than by startWriting() itself.
+        try await Task.sleep(for: .milliseconds(200))
+        do {
+            _ = try await writer.finish()
+            Issue.record("an empty writer unexpectedly completed")
+        } catch let error as RecordingError {
+            #expect(error == .emptyRecording, "writer configuration failed: \(error)")
+        }
+    }
+
+    @Test("Microphone AAC settings follow a mono native device format")
+    func matchesNativeMicrophoneFormat() throws {
+        let settings = SampleWriter.audioOutputSettings(
+            sourceFormatHint: try makeMonoAudioDescription(),
+            fallbackSampleRate: 44_100,
+            fallbackChannelCount: 2
+        )
+        #expect(settings[AVNumberOfChannelsKey] as? Int == 1)
+        #expect(settings[AVSampleRateKey] as? Double == 48_000)
+    }
+
+    private func makeMonoAudioDescription() throws -> CMAudioFormatDescription {
+        var description = AudioStreamBasicDescription(
+            mSampleRate: 48_000,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 4,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 4,
+            mChannelsPerFrame: 1,
+            mBitsPerChannel: 32,
+            mReserved: 0
+        )
+        var formatDescription: CMAudioFormatDescription?
+        #expect(CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &description,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDescription
+        ) == noErr)
+        return try #require(formatDescription)
+    }
+
+    @Test(
+        "The selected camera produces live frames",
+        .enabled(if: canCaptureCamera, "Camera permission is not granted")
+    )
+    func receivesCameraFrame() async throws {
+        let device = try #require(CaptureDevices.defaultVideoInputDevice())
+        let capture = try WebcamCapture(deviceID: device.id)
+        capture.start()
+        defer { capture.stop() }
+
+        for _ in 0..<20 where capture.currentPixelBuffer() == nil {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(capture.currentPixelBuffer() != nil)
     }
 
     @Test(

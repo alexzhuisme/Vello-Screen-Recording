@@ -45,12 +45,56 @@ public final class Settings {
         didSet { defaults.set(recordingFrameRate, forKey: Key.recordingFrameRate) }
     }
 
+    public var recordingCountdown: RecordingCountdown {
+        didSet { defaults.set(recordingCountdown.rawValue, forKey: Key.recordingCountdown) }
+    }
+
+    public var webcamEnabled: Bool {
+        didSet { defaults.set(webcamEnabled, forKey: Key.webcamEnabled) }
+    }
+
+    public var webcamDeviceID: String? {
+        didSet { defaults.set(webcamDeviceID, forKey: Key.webcamDeviceID) }
+    }
+
+    public var webcamPosition: WebcamPosition {
+        didSet { defaults.set(webcamPosition.rawValue, forKey: Key.webcamPosition) }
+    }
+
+    public var webcamCustomPosition: WebcamCustomPosition {
+        didSet {
+            defaults.set(
+                try? JSONEncoder().encode(webcamCustomPosition),
+                forKey: Key.webcamCustomPosition
+            )
+        }
+    }
+
+    public var webcamSize: WebcamSize {
+        didSet { defaults.set(webcamSize.rawValue, forKey: Key.webcamSize) }
+    }
+
+    /// Whether Vello has already presented its first-launch permission setup.
+    /// The individual system permissions remain the source of truth; this flag
+    /// only prevents the explanatory setup alert from appearing every launch.
+    public var didShowInitialPermissionSetup: Bool {
+        didSet {
+            defaults.set(didShowInitialPermissionSetup, forKey: Key.didShowInitialPermissionSetup)
+        }
+    }
+
     public var loopAnimatedExports: Bool {
         didSet { defaults.set(loopAnimatedExports, forKey: Key.loopAnimatedExports) }
     }
 
     public var defaultExportFormat: ExportFormat {
         didSet { defaults.set(defaultExportFormat.rawValue, forKey: Key.defaultExportFormat) }
+    }
+
+    public var exportPresets: [ExportPreset] {
+        didSet {
+            defaults.set(try? JSONEncoder().encode(exportPresets), forKey: Key.exportPresets)
+        }
     }
 
     public var enableShortcuts: Bool {
@@ -64,7 +108,14 @@ public final class Settings {
         }
     }
 
-    /// Bookmark for the folder exports are written to. `nil` means "ask each time".
+    /// Whether exports should show a save panel instead of using Downloads or
+    /// a remembered custom folder.
+    public var asksForSaveLocation: Bool {
+        didSet { defaults.set(asksForSaveLocation, forKey: Key.asksForSaveLocation) }
+    }
+
+    /// Bookmark for a custom folder. `nil` uses Downloads unless
+    /// `asksForSaveLocation` is enabled.
     public var saveDirectoryBookmark: Data? {
         didSet { defaults.set(saveDirectoryBookmark, forKey: Key.saveDirectoryBookmark) }
     }
@@ -100,13 +151,28 @@ public final class Settings {
         }
         audioInputDeviceID = defaults.string(forKey: Key.audioInputDeviceID) ?? systemDefaultAudioDeviceID
         recordingFrameRate = defaults.object(forKey: Key.recordingFrameRate) as? Int ?? 60
+        recordingCountdown = (defaults.object(forKey: Key.recordingCountdown) as? Int)
+            .flatMap(RecordingCountdown.init(rawValue:)) ?? .threeSeconds
+        webcamEnabled = defaults.bool(forKey: Key.webcamEnabled)
+        webcamDeviceID = defaults.string(forKey: Key.webcamDeviceID)
+        webcamPosition = defaults.string(forKey: Key.webcamPosition)
+            .flatMap(WebcamPosition.init(rawValue:)) ?? .bottomRight
+        webcamCustomPosition = defaults.data(forKey: Key.webcamCustomPosition)
+            .flatMap { try? JSONDecoder().decode(WebcamCustomPosition.self, from: $0) }
+            ?? .center
+        webcamSize = defaults.string(forKey: Key.webcamSize)
+            .flatMap(WebcamSize.init(rawValue:)) ?? .medium
+        didShowInitialPermissionSetup = defaults.bool(forKey: Key.didShowInitialPermissionSetup)
         loopAnimatedExports = defaults.object(forKey: Key.loopAnimatedExports) as? Bool ?? true
         defaultExportFormat = defaults.string(forKey: Key.defaultExportFormat)
             .flatMap(ExportFormat.init(rawValue:)) ?? .mp4
+        exportPresets = defaults.data(forKey: Key.exportPresets)
+            .flatMap { try? JSONDecoder().decode([ExportPreset].self, from: $0) } ?? []
         enableShortcuts = defaults.object(forKey: Key.enableShortcuts) as? Bool ?? true
         toggleCropperShortcut = (defaults.data(forKey: Key.toggleCropperShortcut))
             .flatMap { try? JSONDecoder().decode(HotKeyCombo.self, from: $0) }
             ?? .defaultToggleCropper
+        asksForSaveLocation = defaults.bool(forKey: Key.asksForSaveLocation)
         saveDirectoryBookmark = defaults.data(forKey: Key.saveDirectoryBookmark)
         saveDirectoryPath = defaults.string(forKey: Key.saveDirectoryPath)
 
@@ -131,30 +197,49 @@ public final class Settings {
     // MARK: - Save destination
 
     /// Resolves the remembered save folder, refreshing the bookmark if the OS
-    /// reports it stale. Returns `nil` when no folder has been chosen yet.
+    /// reports it stale. With no custom folder, Downloads is the default.
+    /// Returns `nil` only when the user has selected "Ask Every Time".
     public func resolveSaveDirectory() -> URL? {
-        guard let saveDirectoryBookmark else { return nil }
-        do {
-            let (url, isStale) = try SecurityScopedBookmark.resolve(saveDirectoryBookmark)
-            if isStale {
-                try? rememberSaveDirectory(url)
+        if let saveDirectoryBookmark {
+            do {
+                let (url, isStale) = try SecurityScopedBookmark.resolve(saveDirectoryBookmark)
+                if isStale {
+                    try? rememberSaveDirectory(url)
+                }
+                return url
+            } catch {
+                Log.settings.error("Discarding unresolvable save directory bookmark: \(error.localizedDescription)")
+                self.saveDirectoryBookmark = nil
+                saveDirectoryPath = nil
             }
-            return url
-        } catch {
-            Log.settings.error("Discarding unresolvable save directory bookmark: \(error.localizedDescription)")
-            self.saveDirectoryBookmark = nil
-            saveDirectoryPath = nil
-            return nil
         }
+
+        guard !asksForSaveLocation else { return nil }
+        return FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first
     }
 
     public func rememberSaveDirectory(_ url: URL) throws {
         saveDirectoryBookmark = try SecurityScopedBookmark.create(for: url)
         saveDirectoryPath = url.path(percentEncoded: false)
+        asksForSaveLocation = false
+    }
+
+    public func useDownloadsDirectory() {
+        saveDirectoryBookmark = nil
+        saveDirectoryPath = nil
+        asksForSaveLocation = false
+    }
+
+    public func askForSaveLocationEveryTime() {
+        saveDirectoryBookmark = nil
+        saveDirectoryPath = nil
+        asksForSaveLocation = true
     }
 
     public var saveDirectoryDisplayName: String {
-        guard let saveDirectoryPath else { return "Ask every time" }
+        guard let saveDirectoryPath else {
+            return asksForSaveLocation ? "Ask every time" : "Downloads"
+        }
         return URL(fileURLWithPath: saveDirectoryPath).lastPathComponent
     }
 
@@ -166,10 +251,19 @@ public final class Settings {
         static let recordAudio = "recordAudio"
         static let audioInputDeviceID = "audioInputDeviceID"
         static let recordingFrameRate = "recordingFrameRate"
+        static let recordingCountdown = "recordingCountdown"
+        static let webcamEnabled = "webcamEnabled"
+        static let webcamDeviceID = "webcamDeviceID"
+        static let webcamPosition = "webcamPosition"
+        static let webcamCustomPosition = "webcamCustomPosition"
+        static let webcamSize = "webcamSize"
+        static let didShowInitialPermissionSetup = "didShowInitialPermissionSetup"
         static let loopAnimatedExports = "loopAnimatedExports"
         static let defaultExportFormat = "defaultExportFormat"
+        static let exportPresets = "exportPresets"
         static let enableShortcuts = "enableShortcuts"
         static let toggleCropperShortcut = "toggleCropperShortcut"
+        static let asksForSaveLocation = "asksForSaveLocation"
         static let saveDirectoryBookmark = "saveDirectoryBookmark"
         static let saveDirectoryPath = "saveDirectoryPath"
         static let lastSelection = "lastSelection"

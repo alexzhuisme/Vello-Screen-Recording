@@ -26,6 +26,8 @@
 	<string>MIT Licensed</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Vello records audio from the microphone you choose so your recordings can include narration.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Vello uses the camera you choose to add an optional webcam bubble to your recordings.</string>
 	<key>NSSupportsAutomaticTermination</key>
 	<false/>
 	<key>NSSupportsSuddenTermination</key>

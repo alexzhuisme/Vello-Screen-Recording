@@ -131,7 +131,9 @@ final class StatusItemController: NSObject {
         menu.addItem(item(title: "About Vello") { [weak self] in self?.onAbout?() })
         menu.addItem(item(title: "Preferences…", key: ",") { [weak self] in self?.onPreferences?() })
         menu.addItem(.separator())
+        menu.addItem(countdownMenuItem())
         menu.addItem(audioMenuItem())
+        menu.addItem(webcamMenuItem())
         menu.addItem(.separator())
         menu.addItem(item(title: "Quit Vello", key: "q") { [weak self] in self?.onQuit?() })
 
@@ -189,6 +191,46 @@ final class StatusItemController: NSObject {
         inputParent.submenu = inputSubmenu
         inputParent.isEnabled = settings.audioCaptureMode.includesMicrophone
         submenu.addItem(inputParent)
+
+        parent.submenu = submenu
+        return parent
+    }
+
+    private func countdownMenuItem() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Countdown", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+
+        for countdown in RecordingCountdown.allCases {
+            let countdownItem = item(title: countdown.displayName) { [weak self] in
+                self?.settings.recordingCountdown = countdown
+            }
+            countdownItem.state = settings.recordingCountdown == countdown ? .on : .off
+            submenu.addItem(countdownItem)
+        }
+
+        parent.submenu = submenu
+        return parent
+    }
+
+    private func webcamMenuItem() -> NSMenuItem {
+        let parent = NSMenuItem(title: "Webcam", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+
+        let off = item(title: "Off") { [weak self] in
+            self?.settings.webcamEnabled = false
+        }
+        off.state = settings.webcamEnabled ? .off : .on
+        submenu.addItem(off)
+        submenu.addItem(.separator())
+
+        for device in CaptureDevices.videoInputDevices() {
+            let camera = item(title: device.name) { [weak self] in
+                self?.settings.webcamDeviceID = device.id
+                self?.settings.webcamEnabled = true
+            }
+            camera.state = settings.webcamEnabled && settings.webcamDeviceID == device.id ? .on : .off
+            submenu.addItem(camera)
+        }
 
         parent.submenu = submenu
         return parent

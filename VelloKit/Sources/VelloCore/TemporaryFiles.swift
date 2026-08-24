@@ -14,7 +14,10 @@ public enum TemporaryFiles {
         return url
     }
 
-    public static func newRecordingURL(fileExtension: String = "mp4") -> URL {
+    /// Live captures use a QuickTime working file because AVAssetWriter supports
+    /// Vello's separate video, system-audio, and microphone tracks in that
+    /// container. The editor still exports the user's chosen final format.
+    public static func newRecordingURL(fileExtension: String = "mov") -> URL {
         root.appendingPathComponent("recording-\(UUID().uuidString)")
             .appendingPathExtension(fileExtension)
     }

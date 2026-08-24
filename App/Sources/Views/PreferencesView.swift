@@ -7,6 +7,7 @@ struct PreferencesView: View {
     @Bindable var settings: VelloCore.Settings
 
     @State private var audioDevices: [AudioInputDevice] = []
+    @State private var videoDevices: [VideoInputDevice] = []
     @State private var launchesAtLogin = LaunchAtLogin.isEnabled
 
     var body: some View {
@@ -22,6 +23,12 @@ struct PreferencesView: View {
                     Text("60 fps").tag(60)
                 }
 
+                Picker("Countdown", selection: $settings.recordingCountdown) {
+                    ForEach(RecordingCountdown.allCases) { countdown in
+                        Text(countdown.displayName).tag(countdown)
+                    }
+                }
+
                 Picker("Audio", selection: $settings.audioCaptureMode) {
                     ForEach(AudioCaptureMode.allCases) { mode in
                         Text(mode.displayName).tag(mode)
@@ -35,6 +42,37 @@ struct PreferencesView: View {
                     }
                 }
                 .disabled(!settings.audioCaptureMode.includesMicrophone)
+
+                Divider()
+
+                Toggle("Include webcam bubble", isOn: $settings.webcamEnabled)
+
+                Picker("Camera", selection: videoDeviceBinding) {
+                    ForEach(videoDevices) { device in
+                        Text(device.name).tag(device.id)
+                    }
+                }
+                .disabled(!settings.webcamEnabled || videoDevices.isEmpty)
+
+                Picker("Webcam position", selection: $settings.webcamPosition) {
+                    ForEach(WebcamPosition.allCases) { position in
+                        Text(position.displayName).tag(position)
+                    }
+                }
+                .disabled(!settings.webcamEnabled)
+
+                if settings.webcamEnabled, settings.webcamPosition == .custom {
+                    Text("Drag the webcam bubble inside the capture area to place it anywhere.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker("Webcam size", selection: $settings.webcamSize) {
+                    ForEach(WebcamSize.allCases) { size in
+                        Text(size.displayName).tag(size)
+                    }
+                }
+                .disabled(!settings.webcamEnabled)
             }
 
             Section("Exports") {
@@ -53,8 +91,8 @@ struct PreferencesView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Button("Choose…") { SaveDestination.chooseFolder(settings: settings) }
-                        if settings.saveDirectoryBookmark != nil {
-                            Button("Reset") { SaveDestination.forgetFolder(settings: settings) }
+                        if settings.saveDirectoryBookmark != nil || settings.asksForSaveLocation {
+                            Button("Reset") { SaveDestination.useDownloadsFolder(settings: settings) }
                         }
                     }
                 }
@@ -83,6 +121,10 @@ struct PreferencesView: View {
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             audioDevices = CaptureDevices.audioInputDevices()
+            videoDevices = CaptureDevices.videoInputDevices()
+            if settings.webcamDeviceID == nil {
+                settings.webcamDeviceID = CaptureDevices.defaultVideoInputDevice()?.id
+            }
             launchesAtLogin = LaunchAtLogin.isEnabled
         }
     }
@@ -91,6 +133,13 @@ struct PreferencesView: View {
         Binding(
             get: { settings.audioInputDeviceID ?? systemDefaultAudioDeviceID },
             set: { settings.audioInputDeviceID = $0 }
+        )
+    }
+
+    private var videoDeviceBinding: Binding<String> {
+        Binding(
+            get: { settings.webcamDeviceID ?? videoDevices.first?.id ?? "" },
+            set: { settings.webcamDeviceID = $0 }
         )
     }
 
